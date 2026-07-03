@@ -1,0 +1,169 @@
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../api/client'
+import type { ExportResult, Project, SeamParams, Track } from '../types'
+import { SeamEditor } from './SeamEditor'
+
+const DEFAULT_PROJECT = 'my-set'
+
+// TODO(ui): drag-and-drop reordering, multiple projects, waveform lane view.
+export function SetTimeline({ tracks }: { tracks: Track[] }) {
+  const [project, setProject] = useState<Project | null>(null)
+  const [selectedSeam, setSelectedSeam] = useState<number | null>(null) // index into adjacent pairs
+  const [status, setStatus] = useState<string | null>(null)
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null)
+
+  const byId = useMemo(() => new Map(tracks.map((t) => [t.id, t])), [tracks])
+  const inSet = new Set(project?.track_ids ?? [])
+  const analyzed = tracks.filter((t) => t.analysis_status === 'done' && !inSet.has(t.id))
+
+  useEffect(() => {
+    api
+      .loadProject(DEFAULT_PROJECT)
+      .then(setProject)
+      .catch(() => setProject({ name: DEFAULT_PROJECT, track_ids: [], seams: [] }))
+  }, [])
+
+  async function save(next: Project) {
+    setProject(next)
+    try {
+      await api.saveProject(next)
+      setStatus(null)
+    } catch (e) {
+      setStatus(String(e))
+    }
+  }
+
+  function move(index: number, delta: number) {
+    if (!project) return
+    const ids = [...project.track_ids]
+    const j = index + delta
+    if (j < 0 || j >= ids.length) return
+    ;[ids[index], ids[j]] = [ids[j], ids[index]]
+    void save({ ...project, track_ids: ids })
+  }
+
+  // Seams are keyed by track pair so reordering preserves crafted transitions.
+  function commitSeam(outId: number, inId: number, params: SeamParams) {
+    if (!project) return
+    const seams = [...project.seams]
+    const i = seams.findIndex((s) => s.out_track_id === outId && s.in_track_id === inId)
+    const entry = { out_track_id: outId, in_track_id: inId, params }
+    if (i >= 0) seams[i] = entry
+    else seams.push(entry)
+    void save({ ...project, seams })
+  }
+
+  async function suggestOrder() {
+    if (!project) return
+    try {
+      const suggestion = await api.suggestOrder(project.name)
+      void save({ ...project, track_ids: suggestion.track_ids })
+      setStatus('Order suggested (BPM/key/energy greedy) — reorder freely.')
+    } catch (e) {
+      setStatus(String(e))
+    }
+  }
+
+  async function doExport() {
+    if (!project) return
+    setStatus('Rendering… (synchronous for now, hang tight)')
+    setExportResult(null)
+    try {
+      setExportResult(await api.exportProject(project.name))
+      setStatus(null)
+    } catch (e) {
+      setStatus(String(e))
+    }
+  }
+
+  if (!project) return <p className="muted">Loading project…</p>
+
+  return (
+    <section>
+      <div className="toolbar">
+        <strong>{project.name}</strong>
+        <button onClick={() => void suggestOrder()} disabled={project.track_ids.length < 2}>
+          Suggest order
+        </button>
+        <button onClick={() => void doExport()} disabled={project.track_ids.length === 0}>
+          Export set
+        </button>
+        {status && <span className="status">{status}</span>}
+      </div>
+
+      {exportResult && (
+        <p className="status">
+          Rendered {Math.round(exportResult.duration_sec / 60)} min → {exportResult.wav_path}
+          {exportResult.mp3_path ? ` + MP3` : ' (MP3 skipped: ffmpeg missing?)'} + tracklist
+        </p>
+      )}
+
+      <ol className="set-lane">
+        {project.track_ids.map((id, i) => {
+          const t = byId.get(id)
+          return (
+            <li key={id}>
+              <div className="set-track">
+                <span>
+                  {t?.filename ?? `#${id}`}{' '}
+                  <span className="muted">
+                    {t?.bpm ?? '?'} BPM · {t?.camelot ?? '?'}
+                  </span>
+                </span>
+                <span className="row-actions">
+                  <button onClick={() => move(i, -1)}>↑</button>
+                  <button onClick={() => move(i, 1)}>↓</button>
+                  <button
+                    onClick={() =>
+                      void save({ ...project, track_ids: project.track_ids.filter((x) => x !== id) })
+                    }
+                  >
+                    ✕
+                  </button>
+                </span>
+              </div>
+              {i < project.track_ids.length - 1 && (
+                <button
+                  className={`seam ${selectedSeam === i ? 'active' : ''}`}
+                  onClick={() => setSelectedSeam(selectedSeam === i ? null : i)}
+                >
+                  ⇅ transition
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+
+      {selectedSeam !== null &&
+        project.track_ids[selectedSeam + 1] !== undefined &&
+        (() => {
+          const outId = project.track_ids[selectedSeam]
+          const inId = project.track_ids[selectedSeam + 1]
+          const saved = project.seams.find((s) => s.out_track_id === outId && s.in_track_id === inId)
+          return (
+            <SeamEditor
+              key={`${outId}-${inId}`}
+              outTrack={byId.get(outId)!}
+              inTrack={byId.get(inId)!}
+              savedParams={saved?.params ?? null}
+              onCommit={(params) => commitSeam(outId, inId, params)}
+            />
+          )
+        })()}
+
+      <h3>Add analyzed tracks</h3>
+      <ul className="picker">
+        {analyzed.map((t) => (
+          <li key={t.id}>
+            <button onClick={() => void save({ ...project, track_ids: [...project.track_ids, t.id] })}>
+              +
+            </button>{' '}
+            {t.filename} <span className="muted">{t.bpm} BPM · {t.camelot}</span>
+          </li>
+        ))}
+        {analyzed.length === 0 && <li className="muted">No (more) analyzed tracks in the library.</li>}
+      </ul>
+    </section>
+  )
+}

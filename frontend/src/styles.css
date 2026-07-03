@@ -1,0 +1,172 @@
+:root {
+  color-scheme: dark;
+  --bg: #16181d;
+  --panel: #1f2229;
+  --text: #e6e6e6;
+  --muted: #8a8f98;
+  --accent: #ff5a36;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.app { max-width: 1000px; margin: 0 auto; padding: 1rem 2rem 4rem; }
+
+header { display: flex; align-items: baseline; gap: 2rem; }
+h1 { font-size: 1.3rem; letter-spacing: 0.04em; }
+
+nav button, .toolbar button, .row-actions button, .picker button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+nav button.active { border-color: var(--accent); color: var(--accent); }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+.toolbar { display: flex; gap: 0.6rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+.toolbar input {
+  background: var(--panel);
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.35rem 0.6rem;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #2a2d34; }
+th { color: var(--muted); font-weight: 500; }
+
+.muted { color: var(--muted); }
+.status { color: var(--accent); }
+.error { color: #ff6b6b; }
+.st-done { color: #7dd87d; }
+.st-error { color: #ff6b6b; }
+.st-running { color: var(--accent); }
+
+.set-lane { list-style: none; padding: 0; max-width: 700px; }
+.set-track {
+  display: flex;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+}
+.row-actions { display: flex; gap: 0.3rem; }
+.seam {
+  display: block;
+  margin: 0.25rem auto;
+  background: none;
+  border: 1px dashed #444;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0.15rem 0.9rem;
+  cursor: pointer;
+}
+.seam.active, .seam:hover { border-color: var(--accent); color: var(--accent); }
+
+.seam-editor {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.8rem 1.2rem;
+  margin: 1rem 0;
+}
+.seam-editor h3 { margin-top: 0.2rem; }
+.seam-toolbar { margin: 0.6rem 0; }
+.seam-toolbar label { color: var(--muted); }
+
+.seam-editor select {
+  background: var(--bg);
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.25rem 0.4rem;
+}
+
+.chip-row { display: inline-flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; }
+.seam-editor button.chip {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #333;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.seam-editor button.chip.active { border-color: var(--accent); color: var(--accent); }
+
+.seam-waveform {
+  width: 100%;
+  display: block;
+  border: 1px solid #2a2d34;
+  border-radius: 6px;
+  touch-action: none;
+}
+
+.overview-strip { margin-bottom: 0.4rem; }
+.overview-strip canvas {
+  width: 100%;
+  display: block;
+  border: 1px solid #2a2d34;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.time-input {
+  width: 4.5rem;
+  background: var(--bg);
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.2rem 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.hint { font-size: 0.78rem; margin: 0.4rem 0 0.8rem; }
+
+.auto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.auto-side h4 {
+  margin: 0.2rem 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curve-lane { margin-bottom: 0.5rem; }
+.lane-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.curve-lane svg {
+  width: 100%;
+  display: block;
+  background: #131519;
+  border: 1px solid #2a2d34;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.tail-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: 0.8rem 0 0.4rem; }
+.tail-row label { color: var(--muted); font-size: 0.85rem; }
+.tail-row input[type='range'] { accent-color: var(--accent); vertical-align: middle; }
+
+.picker { list-style: none; padding: 0; }
+.picker li { padding: 0.15rem 0; }

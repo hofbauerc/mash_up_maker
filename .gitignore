@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# App data (library DB, analysis cache, rendered sets)
+data/
+
+# Local test tracks (copyrighted audio, not project source)
+test/
+
+# OS / editor
+.DS_Store
+Thumbs.db

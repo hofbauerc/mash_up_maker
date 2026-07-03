@@ -1,0 +1,150 @@
+"""Pydantic models shared by the API. Mirrored in frontend/src/types.ts."""
+
+from pydantic import BaseModel, Field
+
+
+class Section(BaseModel):
+    """A detected structural region of a track (crude in Phase 1 scaffold)."""
+
+    label: str  # intro | build | drop | break | outro
+    start_sec: float
+    end_sec: float
+
+
+class TrackOut(BaseModel):
+    id: int
+    path: str
+    filename: str
+    duration_sec: float | None
+    analysis_status: str
+    analysis_error: str | None = None
+    bpm: float | None = None
+    key_name: str | None = None
+    camelot: str | None = None
+    energy: float | None = None
+
+
+class AnalysisOut(BaseModel):
+    track_id: int
+    bpm: float
+    beat_offset_sec: float
+    key_name: str | None
+    camelot: str | None
+    energy: float | None
+    sections: list[Section]
+
+
+class WaveformOut(BaseModel):
+    """Downsampled waveform for drawing: one absolute peak (0..1) per bin."""
+
+    track_id: int
+    bin_sec: float  # seconds of audio covered by each peak bin
+    duration_sec: float
+    peaks: list[float]
+
+
+class CurvePoint(BaseModel):
+    """One point of an automation curve; values interpolate linearly between
+    points and hold flat before the first / after the last point.
+
+    `beat` counts from the start of that side's transition window: the
+    outgoing side's window is the `blend_beats` before its exit point, the
+    incoming side's window is the `blend_beats` after its entry.
+    """
+
+    beat: float
+    value: float
+
+
+class FilterSweep(BaseModel):
+    """Low/high-pass sweep — mirrors a single Web Audio BiquadFilterNode."""
+
+    kind: str = "off"  # off | lowpass | highpass
+    cutoff_hz: list[CurvePoint] = Field(default_factory=list)  # 20..20000
+
+
+class TailFX(BaseModel):
+    """Reverb/delay tail that lets the outgoing track ring out as it exits."""
+
+    kind: str = "none"  # none | reverb | delay
+    wet: float = 0.3  # 0..1
+    time_beats: float = 0.75  # delay time in beats (delay only)
+    feedback: float = 0.45  # 0..0.9 (delay only)
+
+
+class SideAutomation(BaseModel):
+    """Automation lanes for one side of a seam.
+
+    Empty lanes mean "template default": equal-power fade for 'blend', unity
+    gain for 'cut', EQ flat, no sweep. The parameter set is deliberately
+    limited to what Web Audio can automate live so the client preview can
+    mirror the server render (DESIGN.md #8, risk #1).
+    """
+
+    volume: list[CurvePoint] = Field(default_factory=list)  # linear gain 0..1
+    eq_low_db: list[CurvePoint] = Field(default_factory=list)  # -26..+6 dB
+    eq_mid_db: list[CurvePoint] = Field(default_factory=list)
+    eq_high_db: list[CurvePoint] = Field(default_factory=list)
+    filter: FilterSweep = Field(default_factory=FilterSweep)
+
+
+class SeamParams(BaseModel):
+    """Parameters of one transition.
+
+    Times are in seconds within the respective source track (untouched file).
+    Older project files without the automation fields load with defaults.
+    """
+
+    template: str = "blend"  # blend | cut
+    out_point_sec: float | None = None  # where the outgoing track exits
+    in_point_sec: float = 0.0  # where the incoming track enters from
+    blend_beats: int = 32  # transition window length (in beats of the outgoing track)
+    out_auto: SideAutomation = Field(default_factory=SideAutomation)
+    in_auto: SideAutomation = Field(default_factory=SideAutomation)
+    tail: TailFX = Field(default_factory=TailFX)
+
+
+class Seam(BaseModel):
+    out_track_id: int
+    in_track_id: int
+    params: SeamParams = Field(default_factory=SeamParams)
+
+
+class Project(BaseModel):
+    name: str
+    track_ids: list[int] = Field(default_factory=list)
+    # seams[i] is the transition between track_ids[i] and track_ids[i+1];
+    # kept as a keyed list so reordering tracks can preserve crafted seams.
+    seams: list[Seam] = Field(default_factory=list)
+
+
+class AdjacencyScore(BaseModel):
+    out_track_id: int
+    in_track_id: int
+    bpm_gap_pct: float
+    camelot_distance: int | None
+    score: float  # lower is better
+
+
+class OrderSuggestion(BaseModel):
+    track_ids: list[int]
+    adjacencies: list[AdjacencyScore]
+
+
+class SeamSuggestion(BaseModel):
+    params: SeamParams
+    rationale: str
+
+
+class SeamPreviewOut(BaseModel):
+    """Hybrid-preview metadata; the client fetches the two WAV segments and
+    applies all volume/EQ/filter/tail automation itself via Web Audio."""
+
+    key: str
+    sample_rate: int
+    tau0_sec: float  # preview t=0 expressed in outgoing-track time
+    entry_sec: float  # where the incoming segment starts, in preview time
+    window_sec: float
+    duration_sec: float
+    out_url: str
+    in_url: str
