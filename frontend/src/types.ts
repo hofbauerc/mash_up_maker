@@ -30,6 +30,13 @@ export interface Analysis {
   sections: Section[]
 }
 
+// Manual grid/section correction — any subset of fields.
+export interface AnalysisPatch {
+  bpm?: number
+  beat_offset_sec?: number
+  sections?: Section[]
+}
+
 export interface Waveform {
   track_id: number
   bin_sec: number

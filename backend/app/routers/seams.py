@@ -62,7 +62,7 @@ def suggest(pair: SeamPairIn) -> SeamSuggestion:
     last 32-beat phrase boundary where the outgoing track is still at full
     energy — the end of its last kick section, not the outro. Falls back to
     section labels / track end when peaks can't be computed. Enter at the
-    start of the incoming track.
+    incoming track's first grid beat, so blends land kick-on-kick.
     TODO(seams): pick the incoming entry point the same way (intro vs. slam
     into drop), offer multiple ranked candidates, and honor tempo ramps.
     """
@@ -98,7 +98,13 @@ def suggest(pair: SeamPairIn) -> SeamSuggestion:
         n = min(n, max(0, math.floor((out_a["duration_sec"] - out_a["beat_offset_sec"]) / phrase)))
     out_point = out_a["beat_offset_sec"] + n * phrase
 
-    params = SeamParams(template=template, out_point_sec=round(out_point, 3), in_point_sec=0.0)
+    # Enter on the incoming grid's beat 0 — beat-aligned entry is what makes
+    # the tempo-matched blend land kick-on-kick (the UI snaps later edits).
+    params = SeamParams(
+        template=template,
+        out_point_sec=round(out_point, 3),
+        in_point_sec=round(in_a["beat_offset_sec"], 3),
+    )
     rationale = (
         f"BPM gap {bpm_gap_pct:.1f}% -> {template}; exit on 32-beat phrase boundary "
         f"at {out_point:.1f}s ({source})"

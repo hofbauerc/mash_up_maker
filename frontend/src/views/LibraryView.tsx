@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Track } from '../types'
+import { TrackInspector } from './TrackInspector'
 
 export function LibraryView({ tracks, onChanged }: { tracks: Track[]; onChanged: () => void }) {
   const [folders, setFolders] = useState<string[]>([])
   const [newFolder, setNewFolder] = useState('')
   const [status, setStatus] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
 
   useEffect(() => {
     api.listFolders().then(setFolders).catch(() => {})
@@ -25,6 +27,8 @@ export function LibraryView({ tracks, onChanged }: { tracks: Track[]; onChanged:
       setStatus(String(e))
     }
   }
+
+  const selected = tracks.find((t) => t.id === selectedId && t.analysis_status === 'done')
 
   return (
     <section>
@@ -52,7 +56,13 @@ export function LibraryView({ tracks, onChanged }: { tracks: Track[]; onChanged:
         </thead>
         <tbody>
           {tracks.map((t) => (
-            <tr key={t.id}>
+            <tr
+              key={t.id}
+              className={`track-row ${t.id === selectedId ? 'selected' : ''}`}
+              onClick={() =>
+                t.analysis_status === 'done' && setSelectedId(t.id === selectedId ? null : t.id)
+              }
+            >
               <td>{t.filename}</td>
               <td>{fmtDuration(t.duration_sec)}</td>
               <td>{t.bpm ?? '–'}</td>
@@ -72,6 +82,10 @@ export function LibraryView({ tracks, onChanged }: { tracks: Track[]; onChanged:
           )}
         </tbody>
       </table>
+      {tracks.length > 0 && !selected && (
+        <p className="muted hint">Click an analyzed track to inspect &amp; correct its beat grid and sections.</p>
+      )}
+      {selected && <TrackInspector track={selected} onSaved={onChanged} />}
     </section>
   )
 }

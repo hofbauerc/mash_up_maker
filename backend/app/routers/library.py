@@ -1,10 +1,13 @@
-"""Library endpoints: registered folders, scanning, track listing."""
+"""Library endpoints: registered folders, scanning, track listing,
+manual grid/section correction (DESIGN.md #5)."""
 
 import json
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from .. import config, db, worker
 from ..audio import decode, peaks
@@ -98,5 +101,60 @@ def get_peaks(track_id: int, pps: int = Query(50, ge=10, le=200)) -> WaveformOut
         raise HTTPException(500, str(e)) from e
 
 
-# TODO(analysis-ui): PATCH endpoint for manual grid/section correction
-# (nudge beat_offset_sec, override bpm, relabel sections) — DESIGN.md #5.
+@router.get("/tracks/{track_id}/audio")
+def get_audio(track_id: int) -> FileResponse:
+    """The original audio file — the track inspector plays it (with a
+    metronome overlaid on the grid) to verify corrections by ear."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT path FROM tracks WHERE id=?", (track_id,)).fetchone()
+    if row is None or not Path(row["path"]).is_file():
+        raise HTTPException(404, "no such track")
+    media_type = mimetypes.guess_type(row["path"])[0] or "application/octet-stream"
+    return FileResponse(row["path"], media_type=media_type)
+
+
+class AnalysisPatch(BaseModel):
+    """Manual correction: any subset of the grid + sections (DESIGN.md #5)."""
+
+    bpm: float | None = Field(None, ge=60.0, le=300.0)
+    beat_offset_sec: float | None = None
+    sections: list[Section] | None = None
+
+
+@router.patch("/tracks/{track_id}/analysis")
+def patch_analysis(track_id: int, patch: AnalysisPatch) -> AnalysisOut:
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM analysis WHERE track_id=?", (track_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "track not analyzed (yet) — nothing to correct")
+
+        bpm = patch.bpm if patch.bpm is not None else row["bpm"]
+        offset = (
+            patch.beat_offset_sec if patch.beat_offset_sec is not None else row["beat_offset_sec"]
+        )
+        # The grid model is periodic: any nudge folds back into [0, one beat).
+        offset = round(offset % (60.0 / bpm), 4)
+        if patch.sections is not None:
+            bad = [s for s in patch.sections if s.end_sec <= s.start_sec]
+            if bad:
+                raise HTTPException(422, "section end must be after its start")
+            sections_json = json.dumps(
+                [s.model_dump() for s in sorted(patch.sections, key=lambda s: s.start_sec)]
+            )
+        else:
+            sections_json = row["sections_json"]
+
+        conn.execute(
+            """UPDATE analysis SET bpm=?, beat_offset_sec=?, sections_json=?,
+               analyzed_at=datetime('now') WHERE track_id=?""",
+            (bpm, offset, sections_json, track_id),
+        )
+    return AnalysisOut(
+        track_id=track_id,
+        bpm=bpm,
+        beat_offset_sec=offset,
+        key_name=row["key_name"],
+        camelot=row["camelot"],
+        energy=row["energy"],
+        sections=[Section(**s) for s in json.loads(sections_json)],
+    )

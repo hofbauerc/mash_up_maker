@@ -1,10 +1,8 @@
 """Smoke tests: app boots, DB initializes, pure logic works.
 
-Test data isolation (MASHUP_DATA_DIR) happens in conftest.py.
-
-Audio-dependent paths (analysis, render) need fixture files — TODO(tests):
-generate a synthetic 150 BPM kick loop with numpy and assert the detected
-grid, key handling, and a tiny end-to-end export.
+Test data isolation (MASHUP_DATA_DIR) happens in conftest.py. Render/export
+paths are covered in test_render.py with synthetic audio — TODO(tests):
+generate a 150 BPM kick loop with numpy and assert the *detected* grid too.
 """
 
 from fastapi.testclient import TestClient

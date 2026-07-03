@@ -170,3 +170,39 @@ th { color: var(--muted); font-weight: 500; }
 
 .picker { list-style: none; padding: 0; }
 .picker li { padding: 0.15rem 0; }
+
+.track-row { cursor: pointer; }
+.track-row:hover td { background: #1c1f26; }
+.track-row.selected td { background: #23262e; }
+
+.inspector {
+  background: var(--panel);
+  border: 1px solid #3a6ea5;
+  border-radius: 8px;
+  padding: 0.8rem 1.2rem;
+  margin: 1rem 0;
+}
+.inspector h3 { margin-top: 0.2rem; }
+.inspector .toolbar { margin: 0.6rem 0; }
+.inspector .toolbar label { color: var(--muted); }
+.inspector select {
+  background: var(--bg);
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.25rem 0.4rem;
+}
+.inspector .toolbar button { padding: 0.25rem 0.55rem; }
+
+.section-table { margin-top: 0.6rem; max-width: 560px; }
+.section-table table { margin-bottom: 0.4rem; }
+.section-table td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #2a2d34; }
+.section-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+.section-table .row-actions button { font-size: 0.75rem; padding: 0.15rem 0.5rem; }

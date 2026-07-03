@@ -20,7 +20,7 @@ class ExportResult(BaseModel):
 @router.post("/{name}")
 def export_project(name: str) -> ExportResult:
     """Synchronous for now. TODO(export): background job + progress reporting —
-    a full set render takes noticeable time once tempo-matching and FX land."""
+    a full set render takes noticeable time with tempo-matching and FX."""
     project = load_project(name)
     if not project.track_ids:
         raise HTTPException(400, "project has no tracks")
@@ -28,8 +28,9 @@ def export_project(name: str) -> ExportResult:
         rows = {
             r["id"]: dict(r)
             for r in conn.execute(
-                f"""SELECT id, path, filename FROM tracks
-                    WHERE id IN ({",".join("?" * len(project.track_ids))})""",
+                f"""SELECT t.id, t.path, t.filename, a.bpm, a.beat_offset_sec
+                    FROM tracks t LEFT JOIN analysis a ON a.track_id = t.id
+                    WHERE t.id IN ({",".join("?" * len(project.track_ids))})""",
                 project.track_ids,
             )
         }
@@ -37,6 +38,11 @@ def export_project(name: str) -> ExportResult:
         track_rows = [rows[tid] for tid in project.track_ids]
     except KeyError as e:
         raise HTTPException(409, f"unknown track id in project: {e}") from e
+    unanalyzed = [r["id"] for r in track_rows if r["bpm"] is None]
+    if unanalyzed:
+        raise HTTPException(
+            409, f"tracks not analyzed yet (render needs their beat grids): {unanalyzed}"
+        )
 
     result = render.render_set(project, track_rows, config.EXPORTS_DIR / name)
     return ExportResult(

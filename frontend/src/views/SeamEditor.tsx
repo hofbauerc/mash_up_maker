@@ -5,6 +5,7 @@ import { CurveLane } from '../components/CurveLane'
 import { OverviewStrip } from '../components/OverviewStrip'
 import { IN_COLOR, OUT_COLOR } from '../components/palette'
 import { SeamWaveform } from '../components/SeamWaveform'
+import { TimeInput } from '../components/TimeInput'
 import type { Analysis, SeamParams, SideAutomation, Track, Waveform } from '../types'
 
 // The heart of the tool (DESIGN.md #7): overlapped beat-aligned waveforms,
@@ -296,8 +297,8 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
             Overviews are bar-snapped for big jumps; below, drag the <strong>exit</strong> line
             (snaps to beats), the window edge (4-beat steps), or the incoming lane (snaps to its
             beats). Curves: click to add a point, drag to move, double-click to remove — tweaks are
-            applied to the preview live. Blends play the incoming track tempo-matched; the final
-            export render honors curves in the next milestone.
+            applied to the preview live. Blends play the incoming track tempo-matched; the export
+            renders the same curves, sweeps and tail FX server-side.
           </p>
 
           <div className="auto-grid">
@@ -457,38 +458,3 @@ function SidePanel({
   )
 }
 
-function TimeInput({ valueSec, onCommit }: { valueSec: number; onCommit: (sec: number) => void }) {
-  const [text, setText] = useState(fmtTime(valueSec))
-  useEffect(() => {
-    setText(fmtTime(valueSec))
-  }, [valueSec])
-  return (
-    <input
-      className="time-input"
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        const parsed = parseTime(text)
-        if (parsed == null) setText(fmtTime(valueSec))
-        else onCommit(parsed)
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-      }}
-    />
-  )
-}
-
-function parseTime(text: string): number | null {
-  const t = text.trim()
-  const m = /^(\d+):(\d{1,2}(?:\.\d+)?)$/.exec(t)
-  if (m) return Number(m[1]) * 60 + Number(m[2])
-  if (/^\d+(\.\d+)?$/.test(t)) return Number(t)
-  return null
-}
-
-function fmtTime(sec: number): string {
-  const m = Math.floor(sec / 60)
-  const s = sec - m * 60
-  return `${m}:${s.toFixed(1).padStart(4, '0')}`
-}

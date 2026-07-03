@@ -1,5 +1,6 @@
 import type {
   Analysis,
+  AnalysisPatch,
   ExportResult,
   OrderSuggestion,
   Project,
@@ -29,7 +30,14 @@ export const api = {
   scan: () => request<{ new_tracks: number; queued: number }>('/api/library/scan', { method: 'POST' }),
   listTracks: () => request<Track[]>('/api/library/tracks'),
   getAnalysis: (trackId: number) => request<Analysis>(`/api/library/tracks/${trackId}/analysis`),
-  getPeaks: (trackId: number) => request<Waveform>(`/api/library/tracks/${trackId}/peaks`),
+  patchAnalysis: (trackId: number, patch: AnalysisPatch) =>
+    request<Analysis>(`/api/library/tracks/${trackId}/analysis`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+  getPeaks: (trackId: number, pps = 50) =>
+    request<Waveform>(`/api/library/tracks/${trackId}/peaks?pps=${pps}`),
+  trackAudioUrl: (trackId: number) => `/api/library/tracks/${trackId}/audio`,
 
   listProjects: () => request<string[]>('/api/projects'),
   loadProject: (name: string) => request<Project>(`/api/projects/${encodeURIComponent(name)}`),

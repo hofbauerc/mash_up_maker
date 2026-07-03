@@ -50,14 +50,18 @@ uv run pytest
 - [x] Analysis: BPM + constant beat grid, key → Camelot, energy (crude section detection: TODO improve)
 - [x] Order suggestion (greedy over BPM/Camelot/energy)
 - [x] Set projects (JSON, non-destructive)
-- [x] Naive end-to-end export: WAV + MP3 + tracklist (hard cuts / equal-power crossfades only)
 - [x] Seam editor UI: overlapped beat-aligned waveforms with draggable exit/window/entry,
   full-track overview strips (click to place exit/entry) + numeric time fields,
   blend/cut templates, volume + 3-band EQ curves, filter sweeps, tail FX params
-  (persisted per seam; rendering honors template/points, curves render in the next milestone)
+  (persisted per seam)
 - [x] Seam suggestion exits at the last *full-energy* 32-beat phrase boundary
-  (end of the last kick section, not the outro), with EQ bass-swap seeded for blends
+  (end of the last kick section, not the outro), enters on the incoming grid's
+  first beat, with EQ bass-swap seeded for blends
 - [x] Hybrid preview: server renders tempo-matched segments per seam; volume/EQ/filter/tail
   curves applied live via Web Audio with playhead (curve tweaks re-apply without re-render)
-- [ ] Render engine: tempo-matched blends, EQ curves, filter sweeps, reverb/delay tails
-- [ ] Manual grid/section correction UI
+- [x] Render engine (export = WAV + MP3 + tracklist): grid-aware blends with the incoming
+  track tempo-matched across the window then ramped back to native, volume/EQ curves,
+  filter sweeps and reverb/delay tails mirroring the preview graph, declicked cuts
+- [x] Manual grid/section correction UI: track inspector in the library — zoomable
+  beat-grid waveform, BPM override (×2/÷2), anchor nudges, metronome grid-check
+  playback (live while tweaking), section relabel/split/edit
