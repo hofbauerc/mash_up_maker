@@ -72,6 +72,28 @@ class TailFX(BaseModel):
     feedback: float = 0.45  # 0..0.9 (delay only)
 
 
+class SamplePlacement(BaseModel):
+    """One built-in sample-pack one-shot placed on the seam's beat grid.
+
+    `beat` uses the same domain as CurvePoint: outgoing-track beats counting
+    from the transition window start (negative reaches into the preview
+    lead, values past `blend_beats` land after the exit). Beat-synced kinds
+    (riser, noise) span `beats` beats synthesized at the outgoing tempo;
+    impact and crash are fixed-length one-shots that ignore `beats`.
+    """
+
+    kind: str  # riser | noise | impact | crash
+    beat: float = 0.0
+    beats: float = 16.0
+    gain_db: float = -6.0
+
+
+class SampleKindOut(BaseModel):
+    kind: str
+    label: str
+    beat_synced: bool
+
+
 class SideAutomation(BaseModel):
     """Automation lanes for one side of a seam.
 
@@ -102,6 +124,7 @@ class SeamParams(BaseModel):
     out_auto: SideAutomation = Field(default_factory=SideAutomation)
     in_auto: SideAutomation = Field(default_factory=SideAutomation)
     tail: TailFX = Field(default_factory=TailFX)
+    samples: list[SamplePlacement] = Field(default_factory=list)
 
 
 class Seam(BaseModel):

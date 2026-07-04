@@ -63,6 +63,17 @@ export interface TailFX {
   feedback: number
 }
 
+// One built-in sample placed on the seam's beat grid. `beat` shares the
+// CurvePoint domain (0 = window start, negative = preview lead); beat-synced
+// kinds (riser, noise) span `beats` beats at the outgoing tempo, impact and
+// crash are fixed one-shots that ignore `beats`.
+export interface SamplePlacement {
+  kind: string // riser | noise | impact | crash
+  beat: number
+  beats: number
+  gain_db: number
+}
+
 export interface SideAutomation {
   volume: CurvePoint[]
   eq_low_db: CurvePoint[]
@@ -79,6 +90,7 @@ export interface SeamParams {
   out_auto: SideAutomation
   in_auto: SideAutomation
   tail: TailFX
+  samples: SamplePlacement[]
 }
 
 export interface Seam {

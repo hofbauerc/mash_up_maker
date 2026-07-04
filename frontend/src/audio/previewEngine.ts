@@ -17,7 +17,7 @@
 // cut points / window / template / tempo changes need new segments. The
 // server render stays the ground truth for export (DESIGN.md risk #1).
 
-import type { CurvePoint, SeamParams, SeamPreviewOut, SideAutomation, TailFX } from '../types'
+import type { CurvePoint, SamplePlacement, SeamParams, SeamPreviewOut, SideAutomation, TailFX } from '../types'
 
 export interface LoadedPreview {
   meta: SeamPreviewOut
@@ -39,6 +39,8 @@ export class PreviewEngine {
   private ctx: AudioContext
   private nodes: AudioNode[] = []
   private sources: AudioBufferSourceNode[] = []
+  private sampleCache = new Map<string, AudioBuffer>()
+  private samplePending = new Map<string, Promise<AudioBuffer>>()
   private startedAt = 0
   private startOffset = 0
   playing = false
@@ -50,6 +52,37 @@ export class PreviewEngine {
   async load(meta: SeamPreviewOut): Promise<LoadedPreview> {
     const [outBuf, inBuf] = await Promise.all([this.fetchBuffer(meta.out_url), this.fetchBuffer(meta.in_url)])
     return { meta, outBuf, inBuf }
+  }
+
+  /** Fetch + decode every sample-pack buffer the seam places, so play() can
+   * schedule them synchronously. Resolves instantly once cached. */
+  async prime(params: SeamParams, outBpm: number): Promise<void> {
+    await Promise.all((params.samples ?? []).map((p) => this.loadSample(p, outBpm)))
+  }
+
+  private sampleKey(p: SamplePlacement, outBpm: number): string {
+    return `${p.kind}|${outBpm.toFixed(2)}|${p.beats}`
+  }
+
+  private loadSample(p: SamplePlacement, outBpm: number): Promise<AudioBuffer> {
+    const key = this.sampleKey(p, outBpm)
+    const cached = this.sampleCache.get(key)
+    if (cached) return Promise.resolve(cached)
+    let pending = this.samplePending.get(key)
+    if (!pending) {
+      pending = this.fetchBuffer(`/api/samples/${p.kind}.wav?bpm=${outBpm.toFixed(2)}&beats=${p.beats}`)
+        .then((buf) => {
+          this.sampleCache.set(key, buf)
+          this.samplePending.delete(key)
+          return buf
+        })
+        .catch((e) => {
+          this.samplePending.delete(key)
+          throw e
+        })
+      this.samplePending.set(key, pending)
+    }
+    return pending
   }
 
   private async fetchBuffer(url: string): Promise<AudioBuffer> {
@@ -111,6 +144,25 @@ export class PreviewEngine {
       t0,
       fromSec,
     })
+
+    // Sample-pack one-shots on the outgoing beat grid (beat 0 = window start).
+    // Buffers come from the prime() cache; anything not yet fetched is skipped
+    // and appears on the next (re)start.
+    for (const p of params.samples ?? []) {
+      const buf = this.sampleCache.get(this.sampleKey(p, outBpm))
+      if (!buf) continue
+      const src = this.ctx.createBufferSource()
+      src.buffer = buf
+      const gain = this.ctx.createGain()
+      gain.gain.value = Math.pow(10, p.gain_db / 20)
+      src.connect(gain)
+      gain.connect(master)
+      this.nodes.push(src, gain)
+      const rel = outWinStart + p.beat * beat - fromSec
+      if (rel >= 0) src.start(t0 + rel, 0)
+      else if (-rel < buf.duration) src.start(t0, -rel)
+      this.sources.push(src)
+    }
 
     this.startedAt = t0
     this.startOffset = fromSec

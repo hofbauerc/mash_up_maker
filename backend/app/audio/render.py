@@ -31,7 +31,7 @@ import soundfile as sf
 
 from .. import config
 from ..models import Project, SeamParams, SideAutomation
-from . import decode, fx, stretch
+from . import decode, fx, samples, stretch
 from .preview import LEAD_BEATS
 
 RAMP_BEATS = 32  # post-blend tempo ramp back to the incoming track's native BPM
@@ -93,6 +93,7 @@ def render_set(project: Project, track_rows: list[dict], out_dir: Path) -> Rende
         if nxt is not None:
             params, _, w = nxt
             exit_smp = stream_start + exit_len
+            work = _mix_seam_samples(work, work_start, exit_smp - w, sr, params, row["bpm"])
             entry_next = exit_smp - w if params.template == "blend" else exit_smp
             entry_next = max(entry_next, stream_start)
             # Everything before the next entry can no longer be overlapped.
@@ -194,6 +195,36 @@ def _apply_seam_sides(
                 mixed[len(stream) - n : len(stream) - n + len(wet)] += wet
                 stream = mixed
     return stream
+
+
+def _mix_seam_samples(
+    work: np.ndarray,
+    work_start: int,
+    win_start_smp: int,
+    sr: int,
+    params: SeamParams,
+    out_bpm: float,
+) -> np.ndarray:
+    """Fold the seam's placed sample-pack one-shots into the working mix.
+
+    Placements live on the outgoing beat grid with beat 0 at the window
+    start (matching CurvePoint); beat-synced kinds are synthesized at the
+    outgoing tempo, so the same audio the preview fetched lands here.
+    """
+    beat_smp = 60.0 / out_bpm * sr
+    for p in params.samples:
+        if p.kind not in samples.KINDS:
+            continue  # project written by a newer version: skip, don't fail the export
+        buf = samples.synthesize(p.kind, out_bpm, p.beats, sr) * 10 ** (p.gain_db / 20)
+        pos = win_start_smp + int(round(p.beat * beat_smp)) - work_start
+        drop = max(0, -pos)  # reaching before the working buffer: trim the head
+        if drop >= len(buf):
+            continue
+        need = pos + len(buf)
+        if need > len(work):
+            work = np.concatenate([work, np.zeros((need - len(work), 2), dtype=np.float32)])
+        work[pos + drop : need] += buf[drop:]
+    return work
 
 
 def _volume_env(

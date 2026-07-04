@@ -20,6 +20,9 @@ const STRIP = 7
 const OUT_LANE = { top: 12, h: 100 }
 const IN_LANE = { top: 126, h: 100 }
 const VIEW_PAD_BEATS = 16
+// Sample-pack placements are drawn in the gap between the two lanes.
+const SAMPLE_BAND = { top: 114, h: 9 }
+const SAMPLE_COLOR = '#ffd166'
 
 interface SeamWaveformProps {
   outWave: Waveform
@@ -141,6 +144,26 @@ export function SeamWaveform({
     ctx.fillText(`${params.blend_beats}-beat window`, wx0 + 5, OUT_LANE.top + OUT_LANE.h + 9)
     ctx.fillStyle = IN_COLOR
     ctx.fillText('in ▸', xOf(g.entryTau, view) + 5, IN_LANE.top + 11)
+
+    // Sample-pack placements: beat-synced kinds as spans, one-shots as ticks.
+    for (const s of params.samples ?? []) {
+      const synced = s.kind === 'riser' || s.kind === 'noise'
+      const start = g.winStart + s.beat * g.beatOut
+      const x0 = xOf(start, view)
+      const x1 = synced ? xOf(start + s.beats * g.beatOut, view) : x0 + 3
+      if (x1 < 0 || x0 > w) continue
+      ctx.fillStyle = SAMPLE_COLOR
+      ctx.globalAlpha = 0.9
+      ctx.fillRect(x0, SAMPLE_BAND.top, Math.max(x1 - x0, 3), SAMPLE_BAND.h)
+      ctx.globalAlpha = 1
+      if (x1 - x0 > 44) {
+        ctx.fillStyle = '#131519'
+        ctx.fillText(s.kind, x0 + 4, SAMPLE_BAND.top + 8)
+      } else {
+        ctx.fillStyle = SAMPLE_COLOR
+        ctx.fillText(s.kind, x1 + 4, SAMPLE_BAND.top + 8)
+      }
+    }
 
     if (playheadTau != null) {
       const px = xOf(playheadTau, view)

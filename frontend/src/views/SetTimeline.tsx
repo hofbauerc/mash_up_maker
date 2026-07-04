@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
+import { seamBadges } from '../compat'
 import type { ExportResult, Project, SeamParams, Track } from '../types'
 import { SeamEditor } from './SeamEditor'
 
@@ -123,12 +124,24 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
                 </span>
               </div>
               {i < project.track_ids.length - 1 && (
-                <button
-                  className={`seam ${selectedSeam === i ? 'active' : ''}`}
-                  onClick={() => setSelectedSeam(selectedSeam === i ? null : i)}
-                >
-                  ⇅ transition
-                </button>
+                <div className="seam-row">
+                  <button
+                    className={`seam ${selectedSeam === i ? 'active' : ''}`}
+                    onClick={() => setSelectedSeam(selectedSeam === i ? null : i)}
+                  >
+                    ⇅ transition
+                  </button>
+                  {(() => {
+                    const next = byId.get(project.track_ids[i + 1])
+                    return t && next
+                      ? seamBadges(t, next).map((b) => (
+                          <span key={b.text} className={`badge badge-${b.level}`} title={b.title}>
+                            {b.text}
+                          </span>
+                        ))
+                      : null
+                  })()}
+                </div>
               )}
             </li>
           )

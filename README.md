@@ -65,3 +65,17 @@ uv run pytest
 - [x] Manual grid/section correction UI: track inspector in the library — zoomable
   beat-grid waveform, BPM override (×2/÷2), anchor nudges, metronome grid-check
   playback (live while tweaking), section relabel/split/edit
+
+## Phase 1.5 status
+
+- [x] Built-in sample pack (riser, noise sweep, impact, crash) — procedurally
+  synthesized (seeded, deterministic, nothing to license), beat-synced kinds
+  generated at the outgoing tempo, WAVs cached under `data/cache/samples/`
+- [x] Sample placement in the seam editor: place on the outgoing beat grid
+  (beat 0 = window start; risers end-align to the exit by default), length /
+  gain per placement, drawn on the seam waveform, persisted per seam
+- [x] Samples play in the hybrid preview (scheduled Web Audio buffers, live
+  re-apply on tweak) and render identically in the export mixdown
+- [x] Adjacency warnings: BPM-gap / Camelot / energy-drop badges on every seam
+  in the set timeline, plus a warning in the seam editor when a blend spans
+  a >10 % BPM gap

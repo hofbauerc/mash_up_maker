@@ -6,7 +6,7 @@ import { OverviewStrip } from '../components/OverviewStrip'
 import { IN_COLOR, OUT_COLOR } from '../components/palette'
 import { SeamWaveform } from '../components/SeamWaveform'
 import { TimeInput } from '../components/TimeInput'
-import type { Analysis, SeamParams, SideAutomation, Track, Waveform } from '../types'
+import type { Analysis, SamplePlacement, SeamParams, SideAutomation, Track, Waveform } from '../types'
 
 // The heart of the tool (DESIGN.md #7): overlapped beat-aligned waveforms,
 // template selector, draggable transition point/length, volume + 3-band EQ
@@ -19,6 +19,16 @@ import type { Analysis, SeamParams, SideAutomation, Track, Waveform } from '../t
 
 const BLEND_LENGTHS = [4, 8, 16, 32, 48, 64, 96, 128]
 const DELAY_TIMES = [0.25, 0.5, 0.75, 1, 1.5, 2]
+// Built-in sample pack (Phase 1.5); beat-synced kinds span `beats` at the
+// outgoing tempo, one-shots (impact/crash) have a fixed length.
+const SAMPLE_KINDS = [
+  { kind: 'riser', beatSynced: true },
+  { kind: 'noise', beatSynced: true },
+  { kind: 'impact', beatSynced: false },
+  { kind: 'crash', beatSynced: false },
+] as const
+const SAMPLE_LENGTHS = [4, 8, 16, 32, 64]
+const isBeatSynced = (kind: string) => SAMPLE_KINDS.some((k) => k.kind === kind && k.beatSynced)
 
 interface SeamData {
   outAnalysis: Analysis
@@ -129,6 +139,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
         pv = { ...(await engine.load(meta)), sig }
         previewRef.current = pv
       }
+      await engine.prime(params, data.outAnalysis.bpm)
       engine.play(pv, params, data.outAnalysis.bpm, 0)
       setPreviewState('playing')
       tick(pv)
@@ -147,11 +158,37 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
       if (segmentSignature(next) !== pv.sig) {
         stopPreview() // cut points changed: segments are stale, re-render on next play
       } else if (commit) {
-        const pos = engine.position() // curve tweak: re-apply live from here
-        engine.play(pv, next, data.outAnalysis.bpm, pos)
-        tick(pv)
+        // Curve/sample tweak: re-apply live from the current position. Prime
+        // resolves instantly unless a newly placed sample is still fetching.
+        void engine
+          .prime(next, data.outAnalysis.bpm)
+          .then(() => {
+            if (!engine.playing) return
+            const pos = engine.position()
+            engine.play(pv, next, data.outAnalysis.bpm, pos)
+            tick(pv)
+          })
+          .catch((e) => setPreviewError(String(e)))
       }
     }
+  }
+
+  function updateSample(i: number, patch: Partial<SamplePlacement>) {
+    if (!params) return
+    const list = [...(params.samples ?? [])]
+    list[i] = { ...list[i], ...patch }
+    update({ ...params, samples: list }, true)
+  }
+
+  function addSample(kind: string, beatSynced: boolean) {
+    if (!params) return
+    // Beat-synced samples default to ending at the exit (the drop); one-shots
+    // default to hitting exactly on it.
+    const beats = Math.min(16, params.blend_beats)
+    const placement: SamplePlacement = beatSynced
+      ? { kind, beat: params.blend_beats - beats, beats, gain_db: -6 }
+      : { kind, beat: params.blend_beats, beats: 16, gain_db: -6 }
+    update({ ...params, samples: [...(params.samples ?? []), placement] }, true)
   }
 
   const snapToGrid = (sec: number, a: Analysis) => {
@@ -257,6 +294,17 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                   </button>
                   {previewError && <span className="error">{previewError}</span>}
                 </div>
+
+                {(() => {
+                  const gapPct =
+                    (Math.abs(data.outAnalysis.bpm - data.inAnalysis.bpm) / data.outAnalysis.bpm) * 100
+                  return params.template === 'blend' && gapPct > 10 ? (
+                    <p className="warn-note">
+                      ⚠ {gapPct.toFixed(1)}% BPM gap — a blend this wide stretches audibly; consider a
+                      cut (or slam into the drop).
+                    </p>
+                  ) : null
+                })()}
 
                 <OverviewStrip
                   label={`outgoing full track — click to place exit`}
@@ -377,6 +425,74 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                   />
                 </label>
               </>
+            )}
+          </div>
+
+          <div className="tail-row samples-row">
+            <span>Samples:</span>
+            <span className="chip-row">
+              {SAMPLE_KINDS.map(({ kind, beatSynced }) => (
+                <button key={kind} className="chip" onClick={() => addSample(kind, beatSynced)}>
+                  + {kind}
+                </button>
+              ))}
+            </span>
+            {(params.samples ?? []).map((s, i) => (
+              <span className="sample-item" key={i}>
+                <strong>{s.kind}</strong>
+                <label>
+                  start beat{' '}
+                  <input
+                    type="number"
+                    step={1}
+                    min={-16}
+                    max={params.blend_beats + 32}
+                    value={s.beat}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      if (Number.isFinite(v)) updateSample(i, { beat: v })
+                    }}
+                  />
+                </label>
+                {isBeatSynced(s.kind) && (
+                  <label>
+                    len{' '}
+                    <select
+                      value={s.beats}
+                      onChange={(e) => updateSample(i, { beats: Number(e.target.value) })}
+                    >
+                      {SAMPLE_LENGTHS.map((b) => (
+                        <option key={b} value={b}>
+                          {b} beats
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <label>
+                  gain {s.gain_db} dB{' '}
+                  <input
+                    type="range"
+                    min={-24}
+                    max={6}
+                    step={1}
+                    value={s.gain_db}
+                    onChange={(e) => updateSample(i, { gain_db: Number(e.target.value) })}
+                  />
+                </label>
+                <button
+                  onClick={() =>
+                    update({ ...params, samples: (params.samples ?? []).filter((_, j) => j !== i) }, true)
+                  }
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            {(params.samples ?? []).length === 0 && (
+              <span className="muted">
+                risers/noise end-align to the exit by default; beat 0 = window start
+              </span>
             )}
           </div>
 
