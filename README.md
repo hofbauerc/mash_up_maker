@@ -94,3 +94,19 @@ uv run pytest
 - [x] Preview bakes the stem mix into the server segments (mix changes
   re-render; curve tweaks stay live); export renders identically or answers
   409 when a needed track isn't separated yet
+
+## Mixing helpers (post-Phase-2)
+
+Everything automatic is only a seed — trims and curves stay fully editable.
+
+- [x] Spectral waveforms: seam editor + overview strips colored by band
+  content (dark bass core / base-color mids / pale highs), so kick and bass
+  presence is visible at a glance; per-bin band + RMS data cached with peaks
+- [x] Auto gain: per-track dB trim toward the set's median loudness
+  (timeline button seeds the editable trim fields; preview + render honor
+  them) — quieter masters no longer make blends feel like a dip
+- [x] Content-aware Auto EQ: seam-editor button (and the initial suggestion)
+  reads the band energy of the actual window regions — the bass swap lands
+  where the incoming kick starts, kickless intros get no pointless
+  bass-kill, mids dip only where melodies clash; result is ordinary
+  editable curve points plus a rationale

@@ -35,12 +35,21 @@ class AnalysisOut(BaseModel):
 
 
 class WaveformOut(BaseModel):
-    """Downsampled waveform for drawing: one absolute peak (0..1) per bin."""
+    """Downsampled waveform: one absolute peak (0..1) per bin, plus per-bin
+    spectral band levels and full-band RMS (both may be absent in caches
+    written by older versions — consumers must recompute or fall back).
+
+    bands[i] = [low, mid, high] RMS of the bin, crossovers ~200 Hz / ~4 kHz —
+    low tracks kick+bass, mid melodies/vocals, high hats/air. Feeds the
+    spectral waveform display, loudness matching and content-aware auto-EQ.
+    """
 
     track_id: int
     bin_sec: float  # seconds of audio covered by each peak bin
     duration_sec: float
     peaks: list[float]
+    bands: list[list[float]] | None = None
+    rms: list[float] | None = None
 
 
 class CurvePoint(BaseModel):
@@ -166,6 +175,26 @@ class Project(BaseModel):
     # seams[i] is the transition between track_ids[i] and track_ids[i+1];
     # kept as a keyed list so reordering tracks can preserve crafted seams.
     seams: list[Seam] = Field(default_factory=list)
+    # Per-track level trim in dB, applied to the whole track in preview and
+    # render. Seeded by the auto-gain endpoint (loudness matching toward the
+    # set median), fully user-editable in the timeline.
+    track_gains: dict[int, float] = Field(default_factory=dict)
+
+
+class TrackGainOut(BaseModel):
+    """Suggested set-trim for one track (auto gain-matching)."""
+
+    track_id: int
+    loudness_db: float | None  # 95th-pctile bin RMS in dBFS
+    gain_db: float  # suggested trim toward the set's median loudness
+
+
+class AutoEQOut(BaseModel):
+    """Content-aware EQ seed: ordinary editable curves + why they look so."""
+
+    out_auto: SideAutomation
+    in_auto: SideAutomation
+    rationale: str
 
 
 class AdjacencyScore(BaseModel):

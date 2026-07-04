@@ -42,6 +42,10 @@ export interface Waveform {
   bin_sec: number
   duration_sec: number
   peaks: number[]
+  // Per-bin [low, mid, high] band levels (~200 Hz / ~4 kHz crossovers) and
+  // full-band RMS — missing in caches from older versions.
+  bands?: number[][] | null
+  rms?: number[] | null
 }
 
 // One automation point; linear interpolation between points, flat outside.
@@ -121,6 +125,22 @@ export interface Project {
   name: string
   track_ids: number[]
   seams: Seam[]
+  // Per-track level trim in dB — seeded by auto-gain, freely editable.
+  track_gains: Record<number, number>
+}
+
+// Suggested set-trim for one track (auto gain-matching).
+export interface TrackGainOut {
+  track_id: number
+  loudness_db: number | null
+  gain_db: number
+}
+
+// Content-aware EQ seed: ordinary editable curves + why they look so.
+export interface AutoEQOut {
+  out_auto: SideAutomation
+  in_auto: SideAutomation
+  rationale: string
 }
 
 export interface AdjacencyScore {

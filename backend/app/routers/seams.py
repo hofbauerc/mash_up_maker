@@ -10,9 +10,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .. import config, db
-from ..audio import decode, peaks, stems
+from ..audio import autoeq, decode, peaks, stems
 from ..audio import preview as preview_audio
-from ..models import CurvePoint, SeamParams, SeamPreviewOut, SeamSuggestion
+from ..models import AutoEQOut, SeamParams, SeamPreviewOut, SeamSuggestion
 
 router = APIRouter(prefix="/api/seams", tags=["seams"])
 
@@ -76,6 +76,7 @@ def suggest(pair: SeamPairIn) -> SeamSuggestion:
     beat = 60.0 / out_a["bpm"]
     phrase = 32 * beat
     last_loud = None
+    wf = None
     try:
         wf = peaks.get_or_compute(pair.out_track_id, out_a["path"])
         last_loud = _last_full_energy_sec(wf.peaks, wf.bin_sec, out_a["bpm"])
@@ -111,19 +112,16 @@ def suggest(pair: SeamPairIn) -> SeamSuggestion:
     )
 
     if template == "blend":
-        # Classic hard-dance bass swap: keep the incoming lows killed, then
-        # trade basslines over the last 8 beats of the blend window.
-        b = float(params.blend_beats)
-        params.in_auto.eq_low_db = [
-            CurvePoint(beat=0, value=-26),
-            CurvePoint(beat=max(0.0, b - 8), value=-26),
-            CurvePoint(beat=b, value=0),
-        ]
-        params.out_auto.eq_low_db = [
-            CurvePoint(beat=max(0.0, b - 8), value=0),
-            CurvePoint(beat=b, value=-26),
-        ]
-        rationale += "; low EQ swap over the last 8 beats"
+        # Content-aware EQ seed: bass swap where the incoming kick actually
+        # starts, mid dip only where the melodies collide (autoeq.py).
+        try:
+            in_wf = peaks.get_or_compute(pair.in_track_id, in_a["path"])
+            out_wf = wf or peaks.get_or_compute(pair.out_track_id, out_a["path"])
+            seed = autoeq.seed_eq(out_wf, in_wf, out_a["bpm"], in_a["bpm"], params)
+        except decode.DecodeError:
+            seed = autoeq._static_swap(params, "waveform unavailable — classic late bass swap")
+        params = autoeq.apply_seed(params, seed)
+        rationale += "; " + seed.rationale
 
     return SeamSuggestion(params=params, rationale=rationale)
 
@@ -132,6 +130,24 @@ class SeamPreviewIn(BaseModel):
     out_track_id: int
     in_track_id: int
     params: SeamParams
+
+
+@router.post("/auto-eq")
+def auto_eq(req: SeamPreviewIn) -> AutoEQOut:
+    """Content-aware EQ seed for the seam's *current* geometry — hit it any
+    time after moving the points; the result is ordinary editable curves.
+    Volume and filter lanes are passed through untouched."""
+    with db.connect() as conn:
+        out_a = _analysis(conn, req.out_track_id)
+        in_a = _analysis(conn, req.in_track_id)
+    try:
+        out_wf = peaks.get_or_compute(req.out_track_id, out_a["path"])
+        in_wf = peaks.get_or_compute(req.in_track_id, in_a["path"])
+    except decode.DecodeError as e:
+        raise HTTPException(500, str(e)) from e
+    seed = autoeq.seed_eq(out_wf, in_wf, out_a["bpm"], in_a["bpm"], req.params)
+    merged = autoeq.apply_seed(req.params, seed)
+    return AutoEQOut(out_auto=merged.out_auto, in_auto=merged.in_auto, rationale=seed.rationale)
 
 
 @router.post("/preview")

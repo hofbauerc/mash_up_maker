@@ -62,7 +62,17 @@ th { color: var(--muted); font-weight: 500; }
   border-radius: 8px;
   padding: 0.5rem 0.8rem;
 }
-.row-actions { display: flex; gap: 0.3rem; }
+.row-actions { display: flex; gap: 0.3rem; align-items: center; }
+.trim-field { color: var(--muted); font-size: 0.8rem; margin-right: 0.4rem; white-space: nowrap; }
+.trim-field input {
+  width: 3.4rem;
+  background: var(--bg);
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.15rem 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
 .seam {
   display: block;
   margin: 0.25rem auto;

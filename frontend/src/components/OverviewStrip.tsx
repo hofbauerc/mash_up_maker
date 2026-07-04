@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Analysis, Waveform } from '../types'
-import { SECTION_COLORS } from './palette'
+import { drawSpectralColumn, SECTION_COLORS } from './palette'
 import { useElementWidth } from './useElementWidth'
 
 // Full-track overview: click or drag anywhere to place the seam point there
@@ -22,6 +22,8 @@ interface OverviewStripProps {
   /** Which side of the marker the window lies on. */
   windowSide: 'before' | 'after'
   color: string
+  /** [low, mid, high] shades for the spectral view (falls back to `color`). */
+  bandColors?: [string, string, string]
   playheadSec?: number | null
   onChange: (sec: number, commit: boolean) => void
 }
@@ -34,6 +36,7 @@ export function OverviewStrip({
   windowSec,
   windowSide,
   color,
+  bandColors,
   playheadSec,
   onChange,
 }: OverviewStripProps) {
@@ -66,13 +69,18 @@ export function OverviewStrip({
     ctx.fillRect(0, 0, w, H)
 
     const cy = STRIP + (H - STRIP) / 2
-    ctx.fillStyle = color
     ctx.globalAlpha = 0.8
     for (let x = 0; x < w; x++) {
       const t = ((x + 0.5) / w) * dur
-      const peak = wave.peaks[Math.min(Math.floor(t / wave.bin_sec), wave.peaks.length - 1)]
-      const h = Math.max(peak * ((H - STRIP) / 2 - 2), 0.5)
-      ctx.fillRect(x, cy - h, 1, 2 * h)
+      const bin = Math.min(Math.floor(t / wave.bin_sec), wave.peaks.length - 1)
+      const h = Math.max(wave.peaks[bin] * ((H - STRIP) / 2 - 2), 0.5)
+      const band = bandColors ? wave.bands?.[bin] : undefined
+      if (band) {
+        drawSpectralColumn(ctx, x, cy, h, band, bandColors!)
+      } else {
+        ctx.fillStyle = color
+        ctx.fillRect(x, cy - h, 1, 2 * h)
+      }
     }
     ctx.globalAlpha = 1
 

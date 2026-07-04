@@ -21,7 +21,7 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
     api
       .loadProject(DEFAULT_PROJECT)
       .then(setProject)
-      .catch(() => setProject({ name: DEFAULT_PROJECT, track_ids: [], seams: [] }))
+      .catch(() => setProject({ name: DEFAULT_PROJECT, track_ids: [], seams: [], track_gains: {} }))
   }, [])
 
   async function save(next: Project) {
@@ -65,6 +65,25 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
     }
   }
 
+  function setTrim(id: number, gainDb: number) {
+    if (!project) return
+    void save({ ...project, track_gains: { ...project.track_gains, [id]: gainDb } })
+  }
+
+  async function autoGain() {
+    if (!project) return
+    setStatus('Measuring loudness… (first run decodes each track once)')
+    try {
+      const suggestions = await api.autoGain(project.name)
+      const track_gains = { ...project.track_gains }
+      for (const s of suggestions) track_gains[s.track_id] = s.gain_db
+      void save({ ...project, track_gains })
+      setStatus('Trims matched to the set median — tweak any of them freely.')
+    } catch (e) {
+      setStatus(String(e))
+    }
+  }
+
   async function doExport() {
     if (!project) return
     setStatus('Rendering… (synchronous for now, hang tight)')
@@ -89,6 +108,13 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
           disabled={project.track_ids.length < 2}
         >
           Suggest order
+        </button>
+        <button
+          title="Measure every track's loudness and suggest a dB trim toward the set's median, so quieter masters don't make blends feel like a dip. Fills the editable trim fields — adjust them freely afterwards."
+          onClick={() => void autoGain()}
+          disabled={project.track_ids.length < 2}
+        >
+          Auto gain
         </button>
         <button
           title="Render the finished mix into one continuous WAV + MP3 plus a timestamped tracklist (saved under data/exports)."
@@ -123,6 +149,24 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
                   </span>
                 </span>
                 <span className="row-actions">
+                  <label
+                    className="trim-field"
+                    title="Level trim for this track in the whole mix (dB). Seeded by Auto gain, yours to override."
+                  >
+                    trim{' '}
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={-12}
+                      max={12}
+                      value={project.track_gains[id] ?? 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        if (Number.isFinite(v)) setTrim(id, Math.max(-12, Math.min(12, v)))
+                      }}
+                    />{' '}
+                    dB
+                  </label>
                   <button onClick={() => move(i, -1)}>↑</button>
                   <button onClick={() => move(i, 1)}>↓</button>
                   <button
@@ -172,6 +216,8 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
               outTrack={byId.get(outId)!}
               inTrack={byId.get(inId)!}
               savedParams={saved?.params ?? null}
+              outGainDb={project.track_gains[outId] ?? 0}
+              inGainDb={project.track_gains[inId] ?? 0}
               onCommit={(params) => commitSeam(outId, inId, params)}
             />
           )

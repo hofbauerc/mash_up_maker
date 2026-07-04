@@ -1,6 +1,7 @@
 import type {
   Analysis,
   AnalysisPatch,
+  AutoEQOut,
   ExportResult,
   OrderSuggestion,
   Project,
@@ -9,6 +10,7 @@ import type {
   SeamSuggestion,
   StemsStatus,
   Track,
+  TrackGainOut,
   Waveform,
 } from '../types'
 
@@ -52,6 +54,8 @@ export const api = {
     }),
   suggestOrder: (name: string) =>
     request<OrderSuggestion>(`/api/projects/${encodeURIComponent(name)}/suggest-order`, { method: 'POST' }),
+  autoGain: (name: string) =>
+    request<TrackGainOut[]>(`/api/projects/${encodeURIComponent(name)}/auto-gain`, { method: 'POST' }),
 
   suggestSeam: (outTrackId: number, inTrackId: number) =>
     request<SeamSuggestion>('/api/seams/suggest', {
@@ -60,6 +64,11 @@ export const api = {
     }),
   renderSeamPreview: (outTrackId: number, inTrackId: number, params: SeamParams) =>
     request<SeamPreviewOut>('/api/seams/preview', {
+      method: 'POST',
+      body: JSON.stringify({ out_track_id: outTrackId, in_track_id: inTrackId, params }),
+    }),
+  autoEq: (outTrackId: number, inTrackId: number, params: SeamParams) =>
+    request<AutoEQOut>('/api/seams/auto-eq', {
       method: 'POST',
       body: JSON.stringify({ out_track_id: outTrackId, in_track_id: inTrackId, params }),
     }),

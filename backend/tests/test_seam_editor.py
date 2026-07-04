@@ -97,14 +97,18 @@ def test_suggest_seeds_bass_swap_for_blend():
 
 
 def _seed_peaks_cache(track_id: int, loud_sec: float, total_sec: float) -> None:
-    """Fake a cached peaks file: full level until loud_sec, quiet outro after."""
+    """Fake a cached peaks file: full level until loud_sec, quiet outro after.
+    Includes the spectral fields — caches without them are recomputed."""
     bin_sec = 0.02
     n_loud, n_total = int(loud_sec / bin_sec), int(total_sec / bin_sec)
+    peaks = [0.95] * n_loud + [0.25] * (n_total - n_loud)
     wf = {
         "track_id": track_id,
         "bin_sec": bin_sec,
         "duration_sec": total_sec,
-        "peaks": [0.95] * n_loud + [0.25] * (n_total - n_loud),
+        "peaks": peaks,
+        "rms": [p * 0.5 for p in peaks],
+        "bands": [[p * 0.3, p * 0.3, p * 0.1] for p in peaks],
     }
     d = config.CACHE_DIR / "peaks"
     d.mkdir(parents=True, exist_ok=True)

@@ -81,6 +81,9 @@ def render_set(project: Project, track_rows: list[dict], out_dir: Path) -> Rende
 
         audio = _apply_stem_windows(audio, sr, row["id"], row["bpm"], prev, nxt)
         stream = _build_stream(audio, sr, row["bpm"], prev, nxt)
+        trim = project.track_gains.get(row["id"], 0.0)  # set-trim (auto gain / manual)
+        if trim:
+            stream *= np.float32(10 ** (trim / 20))
         exit_len = len(stream)
         stream = _apply_seam_sides(stream, sr, prev, nxt)
 

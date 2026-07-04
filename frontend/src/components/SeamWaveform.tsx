@@ -1,6 +1,13 @@
 import { useEffect, useRef } from 'react'
 import type { Analysis, SeamParams, Waveform } from '../types'
-import { IN_COLOR, OUT_COLOR, SECTION_COLORS } from './palette'
+import {
+  drawSpectralColumn,
+  IN_BAND_COLORS,
+  IN_COLOR,
+  OUT_BAND_COLORS,
+  OUT_COLOR,
+  SECTION_COLORS,
+} from './palette'
 import { useElementWidth } from './useElementWidth'
 
 // Overlapped, beat-aligned waveform view of one seam (DESIGN.md #7).
@@ -109,10 +116,19 @@ export function SeamWaveform({
     drawSections(ctx, inAnalysis, view, (inT) => g.entryTau + (inT - params.in_point_sec), H - STRIP)
 
     // Outgoing waveform: dimmed after the exit point (that material is cut).
-    drawWave(ctx, outWave, view, (tau) => tau, OUT_LANE, OUT_COLOR, (tau) => (tau > g.outPoint ? 0.25 : 0.95))
+    drawWave(ctx, outWave, view, (tau) => tau, OUT_LANE, OUT_COLOR, OUT_BAND_COLORS, (tau) =>
+      tau > g.outPoint ? 0.25 : 0.95,
+    )
     // Incoming waveform: ghosted before its entry (material that won't play).
-    drawWave(ctx, inWave, view, (tau) => params.in_point_sec + (tau - g.entryTau), IN_LANE, IN_COLOR, (tau) =>
-      tau < g.entryTau ? 0.22 : 0.95,
+    drawWave(
+      ctx,
+      inWave,
+      view,
+      (tau) => params.in_point_sec + (tau - g.entryTau),
+      IN_LANE,
+      IN_COLOR,
+      IN_BAND_COLORS,
+      (tau) => (tau < g.entryTau ? 0.22 : 0.95),
     )
 
     // Grids go over the waveforms — hard-dance masters are a solid block at
@@ -228,18 +244,26 @@ export function SeamWaveform({
     toTrackT: (tau: number) => number,
     lane: { top: number; h: number },
     color: string,
+    bandColors: [string, string, string],
     alphaAt: (tau: number) => number,
   ) {
+    // Spectral view when band data exists: dark bass core, base-color mids,
+    // pale highs — kick sections read as thick dark cores at a glance.
     const cy = lane.top + lane.h / 2
-    ctx.fillStyle = color
     for (let x = 0; x < w; x++) {
       const tau = tauAt(x + 0.5, view)
       const t = toTrackT(tau)
       if (t < 0 || t >= wave.duration_sec) continue
-      const peak = wave.peaks[Math.min(Math.floor(t / wave.bin_sec), wave.peaks.length - 1)]
-      const h = Math.max(peak * (lane.h / 2 - 3), 0.6)
+      const bin = Math.min(Math.floor(t / wave.bin_sec), wave.peaks.length - 1)
+      const h = Math.max(wave.peaks[bin] * (lane.h / 2 - 3), 0.6)
       ctx.globalAlpha = alphaAt(tau)
-      ctx.fillRect(x, cy - h, 1, 2 * h)
+      const band = wave.bands?.[bin]
+      if (band) {
+        drawSpectralColumn(ctx, x, cy, h, band, bandColors)
+      } else {
+        ctx.fillStyle = color
+        ctx.fillRect(x, cy - h, 1, 2 * h)
+      }
     }
     ctx.globalAlpha = 1
   }

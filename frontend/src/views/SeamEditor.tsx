@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { PreviewEngine, segmentSignature, type LoadedPreview } from '../audio/previewEngine'
 import { CurveLane } from '../components/CurveLane'
 import { OverviewStrip } from '../components/OverviewStrip'
-import { IN_COLOR, OUT_COLOR } from '../components/palette'
+import { IN_BAND_COLORS, IN_COLOR, OUT_BAND_COLORS, OUT_COLOR } from '../components/palette'
 import { SeamWaveform } from '../components/SeamWaveform'
 import { TimeInput } from '../components/TimeInput'
 import type {
@@ -93,10 +93,20 @@ interface SeamEditorProps {
   outTrack: Track
   inTrack: Track
   savedParams: SeamParams | null
+  /** Set-trims from the project (auto gain / manual), applied in preview. */
+  outGainDb?: number
+  inGainDb?: number
   onCommit: (params: SeamParams) => void
 }
 
-export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEditorProps) {
+export function SeamEditor({
+  outTrack,
+  inTrack,
+  savedParams,
+  outGainDb = 0,
+  inGainDb = 0,
+  onCommit,
+}: SeamEditorProps) {
   const [data, setData] = useState<SeamData | null>(null)
   const [params, setParams] = useState<SeamParams | null>(null)
   const [rationale, setRationale] = useState<string | null>(null)
@@ -218,7 +228,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
         previewRef.current = pv
       }
       await engine.prime(params, data.outAnalysis.bpm)
-      engine.play(pv, params, data.outAnalysis.bpm, 0)
+      engine.play(pv, params, data.outAnalysis.bpm, 0, { out: outGainDb, in: inGainDb })
       setPreviewState('playing')
       tick(pv)
     } catch (e) {
@@ -243,7 +253,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
           .then(() => {
             if (!engine.playing) return
             const pos = engine.position()
-            engine.play(pv, next, data.outAnalysis.bpm, pos)
+            engine.play(pv, next, data.outAnalysis.bpm, pos, { out: outGainDb, in: inGainDb })
             tick(pv)
           })
           .catch((e) => setPreviewError(String(e)))
@@ -380,6 +390,20 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                   >
                     Re-apply suggestion
                   </button>
+                  <button
+                    title="Re-seed the EQ curves for the CURRENT points and window by analyzing what actually plays: the bass swap lands where the incoming kick starts, mids dip only where melodies clash. Your volume and filter curves stay untouched — and everything remains editable."
+                    onClick={() => {
+                      api
+                        .autoEq(outTrack.id, inTrack.id, params)
+                        .then((r) => {
+                          update({ ...params, out_auto: r.out_auto, in_auto: r.in_auto }, true)
+                          setRationale(r.rationale)
+                        })
+                        .catch((e) => setPreviewError(String(e)))
+                    }}
+                  >
+                    Auto EQ
+                  </button>
                   {previewError && <span className="error">{previewError}</span>}
                 </div>
 
@@ -402,6 +426,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                   windowSec={windowSec}
                   windowSide="before"
                   color={OUT_COLOR}
+                  bandColors={OUT_BAND_COLORS}
                   playheadSec={playheadTau}
                   onChange={(sec, commit) => update({ ...params, out_point_sec: sec }, commit)}
                 />
@@ -413,6 +438,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                   windowSec={windowSec}
                   windowSide="after"
                   color={IN_COLOR}
+                  bandColors={IN_BAND_COLORS}
                   playheadSec={inPlayhead}
                   onChange={(sec, commit) => update({ ...params, in_point_sec: sec }, commit)}
                 />

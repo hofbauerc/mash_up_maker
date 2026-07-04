@@ -98,7 +98,13 @@ export class PreviewEngine {
     return this.playing ? this.startOffset + this.ctx.currentTime - this.startedAt : 0
   }
 
-  play(pv: LoadedPreview, params: SeamParams, outBpm: number, fromSec = 0): void {
+  play(
+    pv: LoadedPreview,
+    params: SeamParams,
+    outBpm: number,
+    fromSec = 0,
+    trims: { out: number; in: number } = { out: 0, in: 0 },
+  ): void {
     this.stop()
     void this.ctx.resume()
     const t0 = this.ctx.currentTime + 0.08
@@ -116,6 +122,7 @@ export class PreviewEngine {
       buf: pv.outBuf,
       bufStartPreview: 0,
       auto: params.out_auto,
+      trimDb: trims.out,
       winStart: outWinStart,
       windowSec,
       beat,
@@ -133,6 +140,7 @@ export class PreviewEngine {
       buf: pv.inBuf,
       bufStartPreview: pv.meta.entry_sec,
       auto: params.in_auto,
+      trimDb: trims.in,
       winStart: pv.meta.entry_sec,
       windowSec,
       beat,
@@ -175,6 +183,8 @@ export class PreviewEngine {
     buf: AudioBuffer
     bufStartPreview: number
     auto: SideAutomation
+    /** Static set-trim (auto gain / manual, dB) applied before automation. */
+    trimDb: number
     winStart: number
     windowSec: number
     beat: number
@@ -187,12 +197,14 @@ export class PreviewEngine {
   }): void {
     const src = this.ctx.createBufferSource()
     src.buffer = o.buf
+    const trim = this.ctx.createGain()
+    trim.gain.value = Math.pow(10, o.trimDb / 20)
     const volume = this.ctx.createGain()
     const eqLow = this.biquad('lowshelf', 200)
     const eqMid = this.biquad('peaking', 1200)
     const eqHigh = this.biquad('highshelf', 6000)
     let head: AudioNode = src
-    for (const node of [volume, eqLow, eqMid, eqHigh]) {
+    for (const node of [trim, volume, eqLow, eqMid, eqHigh]) {
       head.connect(node)
       head = node
     }
@@ -203,7 +215,7 @@ export class PreviewEngine {
       head = sweep
     }
     head.connect(o.master)
-    this.nodes.push(src, volume, eqLow, eqMid, eqHigh, ...(sweep ? [sweep] : []))
+    this.nodes.push(src, trim, volume, eqLow, eqMid, eqHigh, ...(sweep ? [sweep] : []))
 
     const toPts = (curve: CurvePoint[]) =>
       curve.map((p) => ({ t: o.winStart + p.beat * o.beat, v: p.value }))
