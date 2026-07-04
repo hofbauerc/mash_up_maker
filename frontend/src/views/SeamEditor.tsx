@@ -38,10 +38,22 @@ const SAMPLE_KINDS = [
 ] as const
 const SAMPLE_LENGTHS = [4, 8, 16, 32, 64]
 const isBeatSynced = (kind: string) => SAMPLE_KINDS.some((k) => k.kind === kind && k.beatSynced)
+const SAMPLE_HINTS: Record<string, string> = {
+  riser: 'A rising "whoosh" that builds tension toward the switch — ends right on the exit by default.',
+  noise: 'A white-noise sweep that fills the background of the blend.',
+  impact: 'A boom that marks the moment of the switch — lands on the exit by default.',
+  crash: 'A cymbal wash that papers over the seam.',
+}
 
 // Stem transitions (Phase 2). Mixes apply across the transition window only;
 // all-unity = passthrough (no separated stems needed).
 const STEM_NAMES = ['drums', 'bass', 'vocals', 'other'] as const
+const STEM_HINTS: Record<string, string> = {
+  drums: 'the kick and all percussion',
+  bass: 'the bassline',
+  vocals: 'singing and shouts',
+  other: 'melodies, leads, screeches — everything else',
+}
 const PASSTHROUGH: StemMix = { drums: 1, bass: 1, vocals: 1, other: 1 }
 const STEM_PRESETS: { label: string; hint: string; needsIn: boolean; out: StemMix; in: StemMix }[] = [
   {
@@ -284,7 +296,11 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
               <>
                 <div className="toolbar seam-toolbar">
                   {previewState !== 'playing' ? (
-                    <button onClick={() => void playPreview()} disabled={previewState === 'rendering'}>
+                    <button
+                      title="Play this transition with everything applied — curves, FX, samples, stems. The first play renders audio on the server; tweaks afterwards are instant."
+                      onClick={() => void playPreview()}
+                      disabled={previewState === 'rendering'}
+                    >
                       {previewState === 'rendering' ? 'Rendering…' : '▶ Preview'}
                     </button>
                   ) : (
@@ -295,13 +311,18 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                       <button
                         key={t}
                         className={`chip ${params.template === t ? 'active' : ''}`}
+                        title={
+                          t === 'blend'
+                            ? 'Both tracks play together across the window, tempo-matched — the classic smooth DJ mix. Best under a ~10% BPM gap.'
+                            : 'Hard switch at the exit point — instant and clean, works for any BPM gap.'
+                        }
                         onClick={() => update({ ...params, template: t }, true)}
                       >
                         {t}
                       </button>
                     ))}
                   </span>
-                  <label>
+                  <label title="How long the transition lasts, in beats of the outgoing track (32 beats = 8 bars ≈ one hard-dance phrase).">
                     window{' '}
                     <select
                       value={params.blend_beats}
@@ -314,7 +335,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                       ))}
                     </select>
                   </label>
-                  <label>
+                  <label title="Where the outgoing (old) track stops playing — the transition ends here.">
                     exit{' '}
                     <TimeInput
                       valueSec={outPoint}
@@ -333,7 +354,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                       }
                     />
                   </label>
-                  <label>
+                  <label title="Where playback starts inside the incoming (new) track.">
                     in from{' '}
                     <TimeInput
                       valueSec={params.in_point_sec}
@@ -353,6 +374,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                     />
                   </label>
                   <button
+                    title="Throw away your edits on this seam and restore the tool's automatic suggestion."
                     onClick={() => suggested.current && update(suggested.current, true)}
                     disabled={!suggested.current}
                   >
@@ -416,7 +438,9 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
           </p>
 
           <div className="tail-row">
-            <span>Stem transitions:</span>
+            <span title="One-click recipes using the AI-separated instrument layers — tricks EQ alone can't do, like swapping only the kick.">
+              Stem transitions:
+            </span>
             <span className="chip-row">
               {STEM_PRESETS.map((p) => {
                 const ready =
@@ -466,12 +490,21 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
           </div>
 
           <div className="tail-row">
-            <span>Tail FX (outgoing):</span>
+            <span title="Lets the old track ring out into the new one instead of stopping dead — smooths hard cuts.">
+              Tail FX (outgoing):
+            </span>
             <span className="chip-row">
               {(['none', 'reverb', 'delay'] as const).map((k) => (
                 <button
                   key={k}
                   className={`chip ${params.tail.kind === k ? 'active' : ''}`}
+                  title={
+                    k === 'none'
+                      ? 'No tail — the outgoing track just stops at the exit.'
+                      : k === 'reverb'
+                        ? 'The exit washes out in a big room echo under the new track.'
+                        : 'The last beats repeat as fading echoes under the new track.'
+                  }
                   onClick={() => update({ ...params, tail: { ...params.tail, kind: k } }, true)}
                 >
                   {k}
@@ -479,7 +512,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
               ))}
             </span>
             {params.tail.kind !== 'none' && (
-              <label>
+              <label title="How loud the effect tail is.">
                 wet {Math.round(params.tail.wet * 100)}%{' '}
                 <input
                   type="range"
@@ -495,7 +528,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
             )}
             {params.tail.kind === 'delay' && (
               <>
-                <label>
+                <label title="Spacing between the echoes, in beats.">
                   time{' '}
                   <select
                     value={params.tail.time_beats}
@@ -510,7 +543,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                     ))}
                   </select>
                 </label>
-                <label>
+                <label title="How long the echoes keep repeating before dying out.">
                   feedback {Math.round(params.tail.feedback * 100)}%{' '}
                   <input
                     type="range"
@@ -528,18 +561,25 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
           </div>
 
           <div className="tail-row samples-row">
-            <span>Samples:</span>
+            <span title="One-shot sounds placed on the beat grid to glue the transition together — the polish layer of a produced-sounding mix.">
+              Samples:
+            </span>
             <span className="chip-row">
               {SAMPLE_KINDS.map(({ kind, beatSynced }) => (
-                <button key={kind} className="chip" onClick={() => addSample(kind, beatSynced)}>
+                <button
+                  key={kind}
+                  className="chip"
+                  title={SAMPLE_HINTS[kind]}
+                  onClick={() => addSample(kind, beatSynced)}
+                >
                   + {kind}
                 </button>
               ))}
             </span>
             {(params.samples ?? []).map((s, i) => (
               <span className="sample-item" key={i}>
-                <strong>{s.kind}</strong>
-                <label>
+                <strong title={SAMPLE_HINTS[s.kind]}>{s.kind}</strong>
+                <label title={`When the sample starts, in beats from the window start (negative = before the window, ${params.blend_beats} = the exit).`}>
                   start beat{' '}
                   <input
                     type="number"
@@ -554,7 +594,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                   />
                 </label>
                 {isBeatSynced(s.kind) && (
-                  <label>
+                  <label title="How many beats the sample lasts — it is generated at this seam's tempo to fit exactly.">
                     len{' '}
                     <select
                       value={s.beats}
@@ -568,7 +608,7 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
                     </select>
                   </label>
                 )}
-                <label>
+                <label title="Sample volume: 0 dB = full blast, negative = quieter.">
                   gain {s.gain_db} dB{' '}
                   <input
                     type="range"
@@ -632,9 +672,11 @@ function SidePanel({
     max: number,
     def: number,
     format: (v: number) => string,
+    hint?: string,
   ) => (
     <CurveLane
       label={label}
+      hint={hint}
       points={auto[key]}
       blendBeats={blendBeats}
       min={min}
@@ -648,16 +690,60 @@ function SidePanel({
   return (
     <div className="auto-side">
       <h4>{title}</h4>
-      {lane(`volume (${volumeHint})`, 'volume', 0, 1, 1, (v) => v.toFixed(2))}
-      {lane('EQ low', 'eq_low_db', -26, 6, 0, eqFormat)}
-      {lane('EQ mid', 'eq_mid_db', -26, 6, 0, eqFormat)}
-      {lane('EQ high', 'eq_high_db', -26, 6, 0, eqFormat)}
+      {lane(
+        `volume (${volumeHint})`,
+        'volume',
+        0,
+        1,
+        1,
+        (v) => v.toFixed(2),
+        'How loud this track is across the transition (1 = full, 0 = silent). Leave empty for an automatic smooth fade. Click the lane to add a point, drag to shape, double-click to remove.',
+      )}
+      {lane(
+        'EQ low',
+        'eq_low_db',
+        -26,
+        6,
+        0,
+        eqFormat,
+        'The bass region — kick and bassline live here. Two basslines at once sound muddy, so DJs "kill" one side: pull this to −26 dB while the other track keeps its bass.',
+      )}
+      {lane(
+        'EQ mid',
+        'eq_mid_db',
+        -26,
+        6,
+        0,
+        eqFormat,
+        'The middle frequencies — melodies, vocals, screeches. Dip one side to keep two melodies from fighting.',
+      )}
+      {lane(
+        'EQ high',
+        'eq_high_db',
+        -26,
+        6,
+        0,
+        eqFormat,
+        'The treble — hi-hats, cymbals, sparkle. Cutting it makes a track sound dull and distant.',
+      )}
       <div className="chip-row">
-        <span className="lane-label">filter</span>
+        <span
+          className="lane-label"
+          title="A filter sweep — the classic DJ 'wah' effect. Pick a type, then draw where the cutoff moves over the window."
+        >
+          filter
+        </span>
         {(['off', 'lowpass', 'highpass'] as const).map((k) => (
           <button
             key={k}
             className={`chip ${auto.filter.kind === k ? 'active' : ''}`}
+            title={
+              k === 'off'
+                ? 'No filter sweep on this side.'
+                : k === 'lowpass'
+                  ? 'Low-pass: sweeping the cutoff down makes the track sound muffled / underwater — a classic way to ease a track out.'
+                  : 'High-pass: sweeping the cutoff up thins the track to just its highs — makes room for the other track.'
+            }
             onClick={() => onChange({ ...auto, filter: { ...auto.filter, kind: k } }, true)}
           >
             {k === 'lowpass' ? 'LP' : k === 'highpass' ? 'HP' : 'off'}
@@ -665,13 +751,18 @@ function SidePanel({
         ))}
       </div>
       <div className="chip-row">
-        <span className="lane-label">stems</span>
+        <span
+          className="lane-label"
+          title="Stems are the track's instrument layers, pulled apart by AI. Choose which layers of this track play during the transition window — e.g. mute its drums so the other track's kick takes over."
+        >
+          stems
+        </span>
         {stems?.status === 'done' ? (
           STEM_NAMES.map((n) => (
             <button
               key={n}
               className={`chip ${mix[n] > 0 ? 'active' : ''}`}
-              title={`${n} ${mix[n] > 0 ? 'plays' : 'muted'} in the transition window`}
+              title={`${n} = ${STEM_HINTS[n]}. Currently ${mix[n] > 0 ? 'playing' : 'muted'} in the transition window — click to toggle.`}
               onClick={() => onMix({ ...mix, [n]: mix[n] > 0 ? 0 : 1 })}
             >
               {n}
@@ -689,7 +780,11 @@ function SidePanel({
             </button>
           </>
         ) : (
-          <button className="chip" onClick={onRequestStems}>
+          <button
+            className="chip"
+            title="Let AI split this track into drums / bass / vocals / rest. Runs in the background, takes a few minutes, and is done once per track — it unlocks the stem toggles and presets."
+            onClick={onRequestStems}
+          >
             separate stems
           </button>
         )}
@@ -697,6 +792,7 @@ function SidePanel({
       {auto.filter.kind !== 'off' && (
         <CurveLane
           label={`${auto.filter.kind} cutoff`}
+          hint="Where the filter bites, over time. Low-pass: everything above this frequency is removed. High-pass: everything below."
           points={auto.filter.cutoff_hz}
           blendBeats={blendBeats}
           min={20}

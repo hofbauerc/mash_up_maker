@@ -8,6 +8,8 @@ const PAD_Y = 6
 
 interface CurveLaneProps {
   label: string
+  /** Plain-language tooltip explaining what this lane does to the sound. */
+  hint?: string
   points: CurvePoint[]
   /** Curve domain: beats 0..blendBeats within the side's transition window. */
   blendBeats: number
@@ -26,6 +28,7 @@ interface CurveLaneProps {
 // so indices are stable while dragging.
 export function CurveLane({
   label,
+  hint,
   points,
   blendBeats,
   min,
@@ -123,7 +126,7 @@ export function CurveLane({
 
   return (
     <div className="curve-lane" ref={containerRef}>
-      <div className="lane-label">
+      <div className="lane-label" title={hint}>
         <span>{label}</span>
         <span className="muted">{points.length === 0 ? `default ${format(defaultValue)}` : ''}</span>
       </div>

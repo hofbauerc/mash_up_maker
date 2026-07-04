@@ -39,7 +39,12 @@ export function LibraryView({ tracks, onChanged }: { tracks: Track[]; onChanged:
           placeholder="D:\Music\Hardstyle"
           size={50}
         />
-        <button onClick={() => void addAndScan()}>Add folder & scan</button>
+        <button
+          title="Register a music folder and scan it for tracks — new files are analyzed (tempo, key, sections) in the background."
+          onClick={() => void addAndScan()}
+        >
+          Add folder & scan
+        </button>
         {status && <span className="status">{status}</span>}
       </div>
       {folders.length > 0 && <p className="muted">Folders: {folders.join(' · ')}</p>}
@@ -48,10 +53,16 @@ export function LibraryView({ tracks, onChanged }: { tracks: Track[]; onChanged:
           <tr>
             <th>Track</th>
             <th>Length</th>
-            <th>BPM</th>
-            <th>Key</th>
-            <th>Energy</th>
-            <th>Status</th>
+            <th title="Tempo in beats per minute — hard dance lives roughly between 150 and 200.">BPM</th>
+            <th title="Musical key in Camelot notation (e.g. 8A). Keys with the same number, or ±1 with the same letter, mix harmonically — the wheel that makes 'harmonic mixing' easy.">
+              Key
+            </th>
+            <th title="Overall loudness/intensity of the track (0–1) — used to keep the set building instead of dipping.">
+              Energy
+            </th>
+            <th title="Analysis progress. Each track is scanned once for tempo, beat grid, key, energy and song sections.">
+              Status
+            </th>
           </tr>
         </thead>
         <tbody>

@@ -83,10 +83,18 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
     <section>
       <div className="toolbar">
         <strong>{project.name}</strong>
-        <button onClick={() => void suggestOrder()} disabled={project.track_ids.length < 2}>
+        <button
+          title="Sorts the set so neighboring tracks match in tempo, key and energy. Just a suggestion — reorder freely afterwards."
+          onClick={() => void suggestOrder()}
+          disabled={project.track_ids.length < 2}
+        >
           Suggest order
         </button>
-        <button onClick={() => void doExport()} disabled={project.track_ids.length === 0}>
+        <button
+          title="Render the finished mix into one continuous WAV + MP3 plus a timestamped tracklist (saved under data/exports)."
+          onClick={() => void doExport()}
+          disabled={project.track_ids.length === 0}
+        >
           Export set
         </button>
         {status && <span className="status">{status}</span>}
@@ -107,7 +115,10 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
               <div className="set-track">
                 <span>
                   {t?.filename ?? `#${id}`}{' '}
-                  <span className="muted">
+                  <span
+                    className="muted"
+                    title="Tempo (beats per minute) · key in Camelot notation. Keys with the same number, or ±1 with the same letter, blend harmonically."
+                  >
                     {t?.bpm ?? '?'} BPM · {t?.camelot ?? '?'}
                   </span>
                 </span>
@@ -127,6 +138,7 @@ export function SetTimeline({ tracks }: { tracks: Track[] }) {
                 <div className="seam-row">
                   <button
                     className={`seam ${selectedSeam === i ? 'active' : ''}`}
+                    title="Open the transition editor for this pair — where the mix between the two tracks is crafted."
                     onClick={() => setSelectedSeam(selectedSeam === i ? null : i)}
                   >
                     ⇅ transition

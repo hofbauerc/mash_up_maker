@@ -166,11 +166,16 @@ export function TrackInspector({ track, onSaved }: { track: Track; onSaved: () =
       <h3>Grid &amp; sections — {track.filename}</h3>
       <div className="toolbar">
         {!playing ? (
-          <button onClick={() => void playFrom(viewStart)}>▶ Grid check</button>
+          <button
+            title="Play the track with metronome clicks on the detected beat grid. If the clicks drift off the kicks, the grid needs correcting — every blend relies on it."
+            onClick={() => void playFrom(viewStart)}
+          >
+            ▶ Grid check
+          </button>
         ) : (
           <button onClick={stopPlayback}>■ Stop</button>
         )}
-        <label>
+        <label title="The track's tempo in beats per minute. Every beat position is computed from this plus the anchor.">
           BPM{' '}
           <NumInput
             value={draft.bpm}
@@ -180,9 +185,19 @@ export function TrackInspector({ track, onSaved }: { track: Track; onSaved: () =
             }
           />
         </label>
-        <button onClick={() => draft.bpm / 2 >= 60 && updateGrid({ ...draft, bpm: draft.bpm / 2 })}>÷2</button>
-        <button onClick={() => draft.bpm * 2 <= 300 && updateGrid({ ...draft, bpm: draft.bpm * 2 })}>×2</button>
-        <label>
+        <button
+          title="Halve the BPM — fixes a double-time detection error."
+          onClick={() => draft.bpm / 2 >= 60 && updateGrid({ ...draft, bpm: draft.bpm / 2 })}
+        >
+          ÷2
+        </button>
+        <button
+          title="Double the BPM — fixes a half-time detection error (common on very fast hardcore)."
+          onClick={() => draft.bpm * 2 <= 300 && updateGrid({ ...draft, bpm: draft.bpm * 2 })}
+        >
+          ×2
+        </button>
+        <label title="Where the first beat sits, in seconds — nudge it until the grid lines line up with the kicks.">
           anchor{' '}
           <NumInput
             value={draft.beat_offset_sec}
@@ -194,15 +209,19 @@ export function TrackInspector({ track, onSaved }: { track: Track; onSaved: () =
         {[-10, -1, +1, +10].map((ms) => (
           <button
             key={ms}
+            title={`Shift the whole grid ${Math.abs(ms)} ms ${ms > 0 ? 'later' : 'earlier'} — audible immediately while the grid check plays.`}
             onClick={() => updateGrid({ ...draft, beat_offset_sec: fold(draft.beat_offset_sec + ms / 1000) })}
           >
             {ms > 0 ? `+${ms}` : ms} ms
           </button>
         ))}
-        <button onClick={() => updateGrid({ ...draft, beat_offset_sec: fold(draft.beat_offset_sec + beat / 2) })}>
+        <button
+          title="Shift the grid half a beat — for when the clicks land exactly between the kicks."
+          onClick={() => updateGrid({ ...draft, beat_offset_sec: fold(draft.beat_offset_sec + beat / 2) })}
+        >
           +½ beat
         </button>
-        <label>
+        <label title="How many seconds of waveform the zoomed view below shows.">
           zoom{' '}
           <select value={viewLen} onChange={(e) => setViewLen(Number(e.target.value))}>
             {ZOOMS.map((z) => (
@@ -212,10 +231,14 @@ export function TrackInspector({ track, onSaved }: { track: Track; onSaved: () =
             ))}
           </select>
         </label>
-        <button onClick={() => void save()} disabled={!dirty}>
+        <button
+          title="Store the corrected grid and sections — ordering, seam suggestions and the final render use them immediately."
+          onClick={() => void save()}
+          disabled={!dirty}
+        >
           Save corrections
         </button>
-        <button onClick={() => updateGrid(draftOf(analysis))} disabled={!dirty}>
+        <button title="Discard unsaved tweaks." onClick={() => updateGrid(draftOf(analysis))} disabled={!dirty}>
           Revert
         </button>
         {status && <span className="status">{status}</span>}
@@ -456,7 +479,10 @@ function SectionTable({
 
   return (
     <div className="section-table">
-      <div className="lane-label">
+      <div
+        className="lane-label"
+        title="Labeled song regions: intro (kickless start), build (tension rising), drop (full-power kick section), break (calm middle), outro. The suggestion engine uses them to pick good exit/entry points."
+      >
         <span>sections (feed the seam suggester)</span>
       </div>
       <table>
