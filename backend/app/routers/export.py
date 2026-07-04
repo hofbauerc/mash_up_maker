@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from .. import config, db
-from ..audio import render
+from ..audio import render, stems
 from .projects import load_project
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -44,7 +44,10 @@ def export_project(name: str) -> ExportResult:
             409, f"tracks not analyzed yet (render needs their beat grids): {unanalyzed}"
         )
 
-    result = render.render_set(project, track_rows, config.EXPORTS_DIR / name)
+    try:
+        result = render.render_set(project, track_rows, config.EXPORTS_DIR / name)
+    except stems.StemsMissing as e:
+        raise HTTPException(409, str(e)) from e
     return ExportResult(
         wav_path=str(result.wav_path),
         mp3_path=str(result.mp3_path) if result.mp3_path else None,

@@ -6,7 +6,16 @@ import { OverviewStrip } from '../components/OverviewStrip'
 import { IN_COLOR, OUT_COLOR } from '../components/palette'
 import { SeamWaveform } from '../components/SeamWaveform'
 import { TimeInput } from '../components/TimeInput'
-import type { Analysis, SamplePlacement, SeamParams, SideAutomation, Track, Waveform } from '../types'
+import type {
+  Analysis,
+  SamplePlacement,
+  SeamParams,
+  SideAutomation,
+  StemMix,
+  StemsStatus,
+  Track,
+  Waveform,
+} from '../types'
 
 // The heart of the tool (DESIGN.md #7): overlapped beat-aligned waveforms,
 // template selector, draggable transition point/length, volume + 3-band EQ
@@ -29,6 +38,35 @@ const SAMPLE_KINDS = [
 ] as const
 const SAMPLE_LENGTHS = [4, 8, 16, 32, 64]
 const isBeatSynced = (kind: string) => SAMPLE_KINDS.some((k) => k.kind === kind && k.beatSynced)
+
+// Stem transitions (Phase 2). Mixes apply across the transition window only;
+// all-unity = passthrough (no separated stems needed).
+const STEM_NAMES = ['drums', 'bass', 'vocals', 'other'] as const
+const PASSTHROUGH: StemMix = { drums: 1, bass: 1, vocals: 1, other: 1 }
+const STEM_PRESETS: { label: string; hint: string; needsIn: boolean; out: StemMix; in: StemMix }[] = [
+  {
+    label: 'kick swap',
+    hint: 'Outgoing keeps everything but its kick; the incoming kick drives the window.',
+    needsIn: true,
+    out: { ...PASSTHROUGH, drums: 0 },
+    in: { drums: 1, bass: 0, vocals: 0, other: 0 },
+  },
+  {
+    label: 'melody over kick',
+    hint: 'Outgoing melody + vocals ride over the incoming track through the window.',
+    needsIn: false,
+    out: { drums: 0, bass: 0, vocals: 1, other: 1 },
+    in: PASSTHROUGH,
+  },
+  {
+    label: 'acapella over drop',
+    hint: 'Only the outgoing vocals carry across — land the exit on the incoming drop.',
+    needsIn: false,
+    out: { drums: 0, bass: 0, vocals: 1, other: 0 },
+    in: PASSTHROUGH,
+  },
+  { label: 'full mix', hint: 'Reset both sides to the untouched masters.', needsIn: false, out: PASSTHROUGH, in: PASSTHROUGH },
+]
 
 interface SeamData {
   outAnalysis: Analysis
@@ -54,6 +92,8 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
   const [previewState, setPreviewState] = useState<'idle' | 'rendering' | 'playing'>('idle')
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [playheadTau, setPlayheadTau] = useState<number | null>(null)
+  const [outStems, setOutStems] = useState<StemsStatus | null>(null)
+  const [inStems, setInStems] = useState<StemsStatus | null>(null)
   const suggested = useRef<SeamParams | null>(null)
 
   const engineRef = useRef<PreviewEngine | null>(null)
@@ -78,10 +118,14 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
       api.getPeaks(outTrack.id),
       api.getPeaks(inTrack.id),
       api.suggestSeam(outTrack.id, inTrack.id),
+      api.getStems(outTrack.id),
+      api.getStems(inTrack.id),
     ])
-      .then(([outAnalysis, inAnalysis, outWave, inWave, suggestion]) => {
+      .then(([outAnalysis, inAnalysis, outWave, inWave, suggestion, outSt, inSt]) => {
         if (cancelled) return
         setData({ outAnalysis, inAnalysis, outWave, inWave })
+        setOutStems(outSt)
+        setInStems(inSt)
         setRationale(suggestion.rationale)
         suggested.current = suggestion.params
         setParams(savedRef.current ?? suggestion.params)
@@ -102,6 +146,28 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
     },
     [],
   )
+
+  // Poll separation progress while either track's stems job is in flight.
+  const stemsInFlight = [outStems?.status, inStems?.status].some(
+    (s) => s === 'pending' || s === 'running',
+  )
+  useEffect(() => {
+    if (!stemsInFlight) return
+    const timer = setInterval(() => {
+      void api.getStems(outTrack.id).then(setOutStems).catch(() => {})
+      void api.getStems(inTrack.id).then(setInStems).catch(() => {})
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [stemsInFlight, outTrack.id, inTrack.id])
+
+  function requestStems(side: 'out' | 'in') {
+    const id = side === 'out' ? outTrack.id : inTrack.id
+    const set = side === 'out' ? setOutStems : setInStems
+    api
+      .requestStems(id)
+      .then(set)
+      .catch((e) => setPreviewError(String(e)))
+  }
 
   function stopPreview() {
     engineRef.current?.stop()
@@ -349,12 +415,41 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
             renders the same curves, sweeps and tail FX server-side.
           </p>
 
+          <div className="tail-row">
+            <span>Stem transitions:</span>
+            <span className="chip-row">
+              {STEM_PRESETS.map((p) => {
+                const ready =
+                  p.label === 'full mix' ||
+                  (outStems?.status === 'done' && (!p.needsIn || inStems?.status === 'done'))
+                return (
+                  <button
+                    key={p.label}
+                    className="chip"
+                    title={ready ? p.hint : `${p.hint} (separate stems first)`}
+                    disabled={!ready}
+                    onClick={() => update({ ...params, out_stems: p.out, in_stems: p.in }, true)}
+                  >
+                    {p.label}
+                  </button>
+                )
+              })}
+            </span>
+            <span className="muted">
+              stem mixes act across the window; toggling re-renders the preview segments
+            </span>
+          </div>
+
           <div className="auto-grid">
             <SidePanel
               title={`Outgoing — ${outTrack.filename}`}
               auto={params.out_auto}
               blendBeats={params.blend_beats}
               volumeHint={params.template === 'blend' ? 'fade out' : 'full until cut'}
+              stems={outStems}
+              mix={params.out_stems ?? PASSTHROUGH}
+              onMix={(mix) => update({ ...params, out_stems: mix }, true)}
+              onRequestStems={() => requestStems('out')}
               onChange={(auto, commit) => update({ ...params, out_auto: auto }, commit)}
             />
             <SidePanel
@@ -362,6 +457,10 @@ export function SeamEditor({ outTrack, inTrack, savedParams, onCommit }: SeamEdi
               auto={params.in_auto}
               blendBeats={params.blend_beats}
               volumeHint={params.template === 'blend' ? 'fade in' : 'full from cut'}
+              stems={inStems}
+              mix={params.in_stems ?? PASSTHROUGH}
+              onMix={(mix) => update({ ...params, in_stems: mix }, true)}
+              onRequestStems={() => requestStems('in')}
               onChange={(auto, commit) => update({ ...params, in_auto: auto }, commit)}
             />
           </div>
@@ -508,12 +607,20 @@ function SidePanel({
   auto,
   blendBeats,
   volumeHint,
+  stems,
+  mix,
+  onMix,
+  onRequestStems,
   onChange,
 }: {
   title: string
   auto: SideAutomation
   blendBeats: number
   volumeHint: string
+  stems: StemsStatus | null
+  mix: StemMix
+  onMix: (mix: StemMix) => void
+  onRequestStems: () => void
   onChange: (auto: SideAutomation, commit: boolean) => void
 }) {
   const eqFormat = (v: number) => `${v.toFixed(1)} dB`
@@ -556,6 +663,36 @@ function SidePanel({
             {k === 'lowpass' ? 'LP' : k === 'highpass' ? 'HP' : 'off'}
           </button>
         ))}
+      </div>
+      <div className="chip-row">
+        <span className="lane-label">stems</span>
+        {stems?.status === 'done' ? (
+          STEM_NAMES.map((n) => (
+            <button
+              key={n}
+              className={`chip ${mix[n] > 0 ? 'active' : ''}`}
+              title={`${n} ${mix[n] > 0 ? 'plays' : 'muted'} in the transition window`}
+              onClick={() => onMix({ ...mix, [n]: mix[n] > 0 ? 0 : 1 })}
+            >
+              {n}
+            </button>
+          ))
+        ) : stems?.status === 'pending' || stems?.status === 'running' ? (
+          <span className="muted">separating… (takes minutes, runs in the background)</span>
+        ) : stems?.status === 'error' ? (
+          <>
+            <span className="error" title={stems.error ?? undefined}>
+              separation failed
+            </span>
+            <button className="chip" onClick={onRequestStems}>
+              retry
+            </button>
+          </>
+        ) : (
+          <button className="chip" onClick={onRequestStems}>
+            separate stems
+          </button>
+        )}
       </div>
       {auto.filter.kind !== 'off' && (
         <CurveLane

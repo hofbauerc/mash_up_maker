@@ -24,6 +24,13 @@ CREATE TABLE IF NOT EXISTS tracks (
     analysis_error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS stems (
+    track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    -- pending | running | done | error; stem WAVs live in data/cache/stems/{id}/
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT
+);
+
 CREATE TABLE IF NOT EXISTS analysis (
     track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
     bpm REAL NOT NULL,

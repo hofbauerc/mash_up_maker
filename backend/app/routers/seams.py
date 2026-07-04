@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .. import config, db
-from ..audio import decode, peaks
+from ..audio import decode, peaks, stems
 from ..audio import preview as preview_audio
 from ..models import CurvePoint, SeamParams, SeamPreviewOut, SeamSuggestion
 
@@ -144,6 +144,8 @@ def render_preview(req: SeamPreviewIn) -> SeamPreviewOut:
         in_a = _analysis(conn, req.in_track_id)
     try:
         seg = preview_audio.render_segments(out_a, in_a, req.params)
+    except stems.StemsMissing as e:
+        raise HTTPException(409, str(e)) from e
     except decode.DecodeError as e:
         raise HTTPException(500, str(e)) from e
     return SeamPreviewOut(

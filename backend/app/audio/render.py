@@ -31,7 +31,7 @@ import soundfile as sf
 
 from .. import config
 from ..models import Project, SeamParams, SideAutomation
-from . import decode, fx, samples, stretch
+from . import decode, fx, samples, stems, stretch
 from .preview import LEAD_BEATS
 
 RAMP_BEATS = 32  # post-blend tempo ramp back to the incoming track's native BPM
@@ -79,6 +79,7 @@ def render_set(project: Project, track_rows: list[dict], out_dir: Path) -> Rende
         prev = (seams[i - 1], track_rows[i - 1]["bpm"], win_smp[i - 1]) if i > 0 else None
         nxt = (seams[i], row["bpm"], win_smp[i]) if i < len(seams) else None
 
+        audio = _apply_stem_windows(audio, sr, row["id"], row["bpm"], prev, nxt)
         stream = _build_stream(audio, sr, row["bpm"], prev, nxt)
         exit_len = len(stream)
         stream = _apply_seam_sides(stream, sr, prev, nxt)
@@ -195,6 +196,33 @@ def _apply_seam_sides(
                 mixed[len(stream) - n : len(stream) - n + len(wet)] += wet
                 stream = mixed
     return stream
+
+
+def _apply_stem_windows(
+    audio: np.ndarray,
+    sr: int,
+    track_id: int,
+    own_bpm: float,
+    prev: tuple[SeamParams, float, int] | None,
+    nxt: tuple[SeamParams, float, int] | None,
+) -> np.ndarray:
+    """Source-domain stem rewrite of this track's seam windows (Phase 2):
+    the entering side after its in-point, the exiting side before its
+    out-point. Done before any stretch so the preview shares the math."""
+    if prev is not None and prev[0].in_stems.active:
+        params, out_bpm, _ = prev
+        span = stems.in_window_span_sec(params, out_bpm, own_bpm)
+        audio = stems.apply_mix_window(
+            audio, sr, track_id, params.in_point_sec, params.in_point_sec + span, params.in_stems
+        )
+    if nxt is not None and nxt[0].out_stems.active:
+        params, _, _ = nxt
+        out_point = params.out_point_sec if params.out_point_sec is not None else len(audio) / sr
+        span = params.blend_beats * 60.0 / own_bpm  # outgoing side plays native
+        audio = stems.apply_mix_window(
+            audio, sr, track_id, out_point - span, out_point, params.out_stems
+        )
+    return audio
 
 
 def _mix_seam_samples(

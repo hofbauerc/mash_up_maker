@@ -94,6 +94,31 @@ class SampleKindOut(BaseModel):
     beat_synced: bool
 
 
+class StemMix(BaseModel):
+    """Per-stem gains for one seam side, applied across that side's
+    transition window (Phase 2). All-unity means passthrough — the original
+    master plays and no separated stems are required. Anything else needs
+    the track's stems separated first (see /api/library/tracks/{id}/stems).
+    """
+
+    drums: float = 1.0
+    bass: float = 1.0
+    vocals: float = 1.0
+    other: float = 1.0
+
+    @property
+    def active(self) -> bool:
+        return any(getattr(self, n) != 1.0 for n in ("drums", "bass", "vocals", "other"))
+
+
+class StemsOut(BaseModel):
+    """Separation state of one track's stem cache."""
+
+    track_id: int
+    status: str  # none | pending | running | done | error
+    error: str | None = None
+
+
 class SideAutomation(BaseModel):
     """Automation lanes for one side of a seam.
 
@@ -125,6 +150,8 @@ class SeamParams(BaseModel):
     in_auto: SideAutomation = Field(default_factory=SideAutomation)
     tail: TailFX = Field(default_factory=TailFX)
     samples: list[SamplePlacement] = Field(default_factory=list)
+    out_stems: StemMix = Field(default_factory=StemMix)
+    in_stems: StemMix = Field(default_factory=StemMix)
 
 
 class Seam(BaseModel):

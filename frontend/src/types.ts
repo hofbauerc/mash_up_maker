@@ -74,6 +74,22 @@ export interface SamplePlacement {
   gain_db: number
 }
 
+// Per-stem gains for one seam side, applied across that side's transition
+// window (Phase 2). All-unity = passthrough; anything else needs the track's
+// stems separated first.
+export interface StemMix {
+  drums: number
+  bass: number
+  vocals: number
+  other: number
+}
+
+export interface StemsStatus {
+  track_id: number
+  status: 'none' | 'pending' | 'running' | 'done' | 'error'
+  error: string | null
+}
+
 export interface SideAutomation {
   volume: CurvePoint[]
   eq_low_db: CurvePoint[]
@@ -91,6 +107,8 @@ export interface SeamParams {
   in_auto: SideAutomation
   tail: TailFX
   samples: SamplePlacement[]
+  out_stems: StemMix
+  in_stems: StemMix
 }
 
 export interface Seam {

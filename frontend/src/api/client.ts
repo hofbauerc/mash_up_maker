@@ -7,6 +7,7 @@ import type {
   SeamParams,
   SeamPreviewOut,
   SeamSuggestion,
+  StemsStatus,
   Track,
   Waveform,
 } from '../types'
@@ -38,6 +39,9 @@ export const api = {
   getPeaks: (trackId: number, pps = 50) =>
     request<Waveform>(`/api/library/tracks/${trackId}/peaks?pps=${pps}`),
   trackAudioUrl: (trackId: number) => `/api/library/tracks/${trackId}/audio`,
+  getStems: (trackId: number) => request<StemsStatus>(`/api/library/tracks/${trackId}/stems`),
+  requestStems: (trackId: number) =>
+    request<StemsStatus>(`/api/library/tracks/${trackId}/stems`, { method: 'POST' }),
 
   listProjects: () => request<string[]>('/api/projects'),
   loadProject: (name: string) => request<Project>(`/api/projects/${encodeURIComponent(name)}`),

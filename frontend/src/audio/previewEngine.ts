@@ -17,7 +17,7 @@
 // cut points / window / template / tempo changes need new segments. The
 // server render stays the ground truth for export (DESIGN.md risk #1).
 
-import type { CurvePoint, SamplePlacement, SeamParams, SeamPreviewOut, SideAutomation, TailFX } from '../types'
+import type { CurvePoint, SamplePlacement, SeamParams, SeamPreviewOut, SideAutomation, StemMix, TailFX } from '../types'
 
 export interface LoadedPreview {
   meta: SeamPreviewOut
@@ -25,9 +25,11 @@ export interface LoadedPreview {
   inBuf: AudioBuffer
 }
 
-/** Params that require re-rendering server segments (vs. live-applied curves). */
+/** Params that require re-rendering server segments (vs. live-applied curves).
+ * Stem mixes are baked into the segments server-side, so they belong here. */
 export function segmentSignature(p: SeamParams): string {
-  return [p.template, p.out_point_sec, p.in_point_sec, p.blend_beats].join('|')
+  const sm = (m?: StemMix) => (m ? `${m.drums},${m.bass},${m.vocals},${m.other}` : '1,1,1,1')
+  return [p.template, p.out_point_sec, p.in_point_sec, p.blend_beats, sm(p.out_stems), sm(p.in_stems)].join('|')
 }
 
 interface TimeValue {

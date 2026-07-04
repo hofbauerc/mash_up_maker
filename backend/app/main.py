@@ -14,6 +14,7 @@ async def lifespan(app: FastAPI):
     db.init_db()
     worker.start()
     worker.enqueue_pending()  # resume analyses interrupted by a restart
+    worker.resume_stems()  # same for stem separations (Phase 2)
     yield
     worker.shutdown()
 

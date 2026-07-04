@@ -10,8 +10,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import config, db, worker
-from ..audio import decode, peaks
-from ..models import AnalysisOut, Section, TrackOut, WaveformOut
+from ..audio import decode, peaks, stems
+from ..models import AnalysisOut, Section, StemsOut, TrackOut, WaveformOut
 
 router = APIRouter(prefix="/api/library", tags=["library"])
 
@@ -111,6 +111,45 @@ def get_audio(track_id: int) -> FileResponse:
         raise HTTPException(404, "no such track")
     media_type = mimetypes.guess_type(row["path"])[0] or "application/octet-stream"
     return FileResponse(row["path"], media_type=media_type)
+
+
+@router.get("/tracks/{track_id}/stems")
+def get_stems(track_id: int) -> StemsOut:
+    """Separation state (Phase 2). 'done' is only reported while the cached
+    stem WAVs actually exist, so a cleared cache offers re-separation."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT status, error FROM stems WHERE track_id=?", (track_id,)
+        ).fetchone()
+    if row is None or (row["status"] == "done" and not stems.stems_ready(track_id)):
+        return StemsOut(track_id=track_id, status="none")
+    return StemsOut(track_id=track_id, status=row["status"], error=row["error"])
+
+
+@router.post("/tracks/{track_id}/stems")
+def request_stems(track_id: int) -> StemsOut:
+    """Queue background stem separation; idempotent while one is in flight."""
+    with db.connect() as conn:
+        track = conn.execute("SELECT path FROM tracks WHERE id=?", (track_id,)).fetchone()
+        if track is None:
+            raise HTTPException(404, "no such track")
+        existing = conn.execute(
+            "SELECT status FROM stems WHERE track_id=?", (track_id,)
+        ).fetchone()
+        if existing is not None and existing["status"] in ("pending", "running"):
+            return StemsOut(track_id=track_id, status=existing["status"])
+        if (
+            existing is not None
+            and existing["status"] == "done"
+            and stems.stems_ready(track_id)
+        ):
+            return StemsOut(track_id=track_id, status="done")
+        conn.execute(
+            "INSERT OR REPLACE INTO stems (track_id, status, error) VALUES (?, 'pending', NULL)",
+            (track_id,),
+        )
+    worker.enqueue_stems(track_id, track["path"])
+    return StemsOut(track_id=track_id, status="pending")
 
 
 class AnalysisPatch(BaseModel):

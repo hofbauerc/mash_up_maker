@@ -20,8 +20,8 @@ from pathlib import Path
 import soundfile as sf
 
 from .. import config
-from ..models import SeamParams
-from . import decode, stretch
+from ..models import SeamParams, StemMix
+from . import decode, stems, stretch
 
 LEAD_BEATS = 16
 TAIL_BEATS = 32
@@ -61,7 +61,8 @@ def render_segments(out_a: dict, in_a: dict, params: SeamParams) -> PreviewSegme
 
     key = hashlib.sha1(
         f"{out_a['track_id']}:{in_a['track_id']}:{params.template}:{out_point:.3f}:"
-        f"{params.in_point_sec:.3f}:{params.blend_beats}:{out_bpm}:{in_bpm}".encode()
+        f"{params.in_point_sec:.3f}:{params.blend_beats}:{out_bpm}:{in_bpm}:"
+        f"{_stem_key(params.out_stems)}:{_stem_key(params.in_stems)}".encode()
     ).hexdigest()[:16]
     cache_dir = config.CACHE_DIR / "preview"
     out_path = cache_dir / f"{key}_out.wav"
@@ -70,11 +71,20 @@ def render_segments(out_a: dict, in_a: dict, params: SeamParams) -> PreviewSegme
     if not (out_path.exists() and in_path.exists()):
         cache_dir.mkdir(parents=True, exist_ok=True)
         out_audio = decode.decode(out_a["path"], sample_rate=sr, mono=False)
+        if params.out_stems.active:  # stem rewrite of the window, pre-slice —
+            out_audio = stems.apply_mix_window(  # the same math the render runs
+                out_audio, sr, out_a["track_id"], out_point - window_sec, out_point, params.out_stems
+            )
         i0 = int(tau0 * sr)
         i1 = min(int(out_point * sr), len(out_audio))
         _write_wav(out_path, out_audio[i0:max(i0 + 1, i1)], sr)
 
         in_audio = decode.decode(in_a["path"], sample_rate=sr, mono=False)
+        if params.in_stems.active:
+            span = stems.in_window_span_sec(params, out_bpm, in_bpm)
+            in_audio = stems.apply_mix_window(
+                in_audio, sr, in_a["track_id"], params.in_point_sec, params.in_point_sec + span, params.in_stems
+            )
         j0 = min(int(params.in_point_sec * sr), max(0, len(in_audio) - 1))
         j1 = min(j0 + int(src_dur * sr), len(in_audio))
         in_seg = in_audio[j0:max(j0 + 1, j1)]
@@ -95,6 +105,10 @@ def render_segments(out_a: dict, in_a: dict, params: SeamParams) -> PreviewSegme
         window_sec=round(window_sec, 4),
         duration_sec=round(duration, 3),
     )
+
+
+def _stem_key(mix: StemMix) -> str:
+    return f"{mix.drums:g},{mix.bass:g},{mix.vocals:g},{mix.other:g}"
 
 
 def _write_wav(path: Path, audio, sr: int) -> None:

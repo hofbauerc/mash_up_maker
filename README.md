@@ -79,3 +79,18 @@ uv run pytest
 - [x] Adjacency warnings: BPM-gap / Camelot / energy-drop badges on every seam
   in the set timeline, plus a warning in the seam editor when a blend spans
   a >10 % BPM gap
+
+## Phase 2 status
+
+- [x] Stem separation: Demucs htdemucs (CPU or CUDA if available), one
+  background job at a time, 4 stems cached per track under
+  `data/cache/stems/{id}/`; triggered from the seam editor, resumed after
+  restarts. First separation downloads the model weights (~80 MB)
+- [x] Per-side stem mixes on every seam: drums/bass/vocals/other toggles
+  applied across the transition window, rewritten in the source domain
+  before any tempo-stretch so preview and export share the math
+- [x] Stem transition presets: kick swap, melody over kick, acapella over
+  drop (and full-mix reset)
+- [x] Preview bakes the stem mix into the server segments (mix changes
+  re-render; curve tweaks stay live); export renders identically or answers
+  409 when a needed track isn't separated yet
